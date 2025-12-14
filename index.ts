@@ -251,6 +251,20 @@ const main = async () => {
       }
     }
   );
+
+  // Register slash command to unlink all references to the current page
+  logseq.Editor.registerSlashCommand(
+    "Unlink all references to this page",
+    async () => {
+      const currentPage = await logseq.Editor.getCurrentPage();
+      if (currentPage) {
+        const pageName = currentPage.originalName || currentPage.name;
+        unlinkAllReferencesToPage(pageName);
+      } else {
+        logseq.App.showMsg("Please run this command on a page", "warning");
+      }
+    }
+  );
   logseq.App.registerCommandShortcut(
     { binding: logseq.settings?.stateKeybinding },
     () => {
