@@ -31,13 +31,13 @@ async function fetchPropertyIgnoreList() {
   [:find (pull ?b [*])
              :where
              [?b :block/properties ?p]
-             [(get ?p :automatic-ignore)]]
+             [(get ?p :auto-link-ignore)]]
   `;
   let result = await logseq.DB.datascriptQuery(query);
   return result
     .filter(
       (item) =>
-        item[0]["name"] && item[0].properties["automatic-ignore"]
+        item[0]["name"] && item[0].properties["auto-link-ignore"]
     )
     .map((item) =>
       [
