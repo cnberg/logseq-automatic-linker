@@ -465,5 +465,41 @@ describe("replaceContentWithPageLinks()", () => {
       expect(content).toBe("Text with[[existing]]link and[[other]]word");
       expect(update).toBe(true);
     });
+
+    it("should not match inside existing links (longer match first)", () => {
+      // Bug fix: "一二三四" should not become "[[一[[二三]]四]]"
+      // when both "一二三四" and "二三" are pages
+      let [content, update] = replaceContentWithPageLinks(
+        ["一二三四", "二三"], // sorted by length desc
+        "这是一二三四的内容",
+        false,
+        false
+      );
+      expect(content).toBe("这是[[一二三四]]的内容");
+      expect(update).toBe(true);
+    });
+
+    it("should not match shorter page inside already linked longer page", () => {
+      // If content already has [[一二三四]], "二三" should not be linked inside it
+      let [content, update] = replaceContentWithPageLinks(
+        ["二三"],
+        "这是[[一二三四]]的内容",
+        false,
+        false
+      );
+      expect(content).toBe("这是[[一二三四]]的内容");
+      expect(update).toBe(false);
+    });
+
+    it("should link shorter page outside of existing links", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["一二三四", "二三"],
+        "这是一二三四和二三的内容",
+        false,
+        false
+      );
+      expect(content).toBe("这是[[一二三四]]和[[二三]]的内容");
+      expect(update).toBe(true);
+    });
   });
 });

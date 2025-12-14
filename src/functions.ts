@@ -3,6 +3,9 @@ const CODE_BLOCK_PLACEHOLDER = "71e46a9e-1150-49c3-a04b-0491ebe05922";
 const INLINE_CODE_PLACEHOLDER = "164b97c2-beb7-4204-99b4-6ec2ddc93f9c";
 const PROPERTY_PLACEHOLDER = "50220b1c-63f0-4f57-aa73-08c4d936a419";
 const MARKDOWN_LINK_PLACEHOLDER = "53c65a4a-137d-44a8-8849-8ec6ca411942";
+const EXISTING_LINK_PLACEHOLDER = "a1b2c3d4-5678-90ab-cdef-1234567890ab";
+// Temporary placeholder prefix for new links during processing to prevent nested matching
+const TEMP_LINK_PLACEHOLDER_PREFIX = "@@TEMPLINK@@";
 
 // Cache for compiled regular expressions to avoid repeated compilation
 const regexCache = new Map<string, RegExp>();
@@ -151,7 +154,20 @@ export function replaceContentWithPageLinks(
     }
   );
 
+  // Protect existing [[...]] links and #[[...]] tags from being matched inside
+  // This prevents "[[一二三四]]" from having "二三" matched inside it
+  const existingLinksTracker: string[] = [];
+  content = content.replaceAll(/#?\[\[[^\[\]]+\]\]/g, (match) => {
+    existingLinksTracker.push(match);
+    console.debug({ LogseqAutomaticLinker: "existing link found", match });
+    return EXISTING_LINK_PLACEHOLDER;
+  });
+
   let needsUpdate = false;
+  // Map to store temporary placeholders and their actual link content
+  const tempLinksMap: Map<string, string> = new Map();
+  let tempLinkIndex = 0;
+
   allPages.forEach((page) => {
     // Skip empty pages
     if (page.length === 0) {
@@ -163,10 +179,13 @@ export function replaceContentWithPageLinks(
     if (containsCJK(page)) {
       // Use cached Chinese regex
       const chineseRegex = getChineseRegex(page);
-      const newContent = content.replaceAll(
-        chineseRegex,
-        parseAsTags ? `#${page}` : `[[${page}]]`
-      );
+      // Use temporary placeholder (index-based) to prevent nested matching
+      const newContent = content.replaceAll(chineseRegex, () => {
+        const placeholder = `${TEMP_LINK_PLACEHOLDER_PREFIX}${tempLinkIndex++}@@`;
+        const actualLink = parseAsTags ? `#${page}` : `[[${page}]]`;
+        tempLinksMap.set(placeholder, actualLink);
+        return placeholder;
+      });
       if (newContent !== content) {
         content = newContent;
         needsUpdate = true;
@@ -183,10 +202,16 @@ export function replaceContentWithPageLinks(
           // Otherwise, use the page case
           let whichCase = page == page.toLowerCase() ? match : page;
 
+          // Use temporary placeholder (index-based) to prevent nested matching
+          const placeholder = `${TEMP_LINK_PLACEHOLDER_PREFIX}${tempLinkIndex++}@@`;
+          let actualLink: string;
           if (parseAsTags || (parseSingleWordAsTag && !hasSpaces)) {
-            return hasSpaces ? `#[[${whichCase}]]` : `#${whichCase}`;
+            actualLink = hasSpaces ? `#[[${whichCase}]]` : `#${whichCase}`;
+          } else {
+            actualLink = `[[${whichCase}]]`;
           }
-          return `[[${whichCase}]]`;
+          tempLinksMap.set(placeholder, actualLink);
+          return placeholder;
         });
         if (newContent !== content) {
           content = newContent;
@@ -194,6 +219,16 @@ export function replaceContentWithPageLinks(
         }
       }
     }
+  });
+
+  // Convert temporary placeholders to actual links
+  tempLinksMap.forEach((actualLink, placeholder) => {
+    content = content.replace(placeholder, actualLink);
+  });
+
+  // Restore existing links before space cleanup so they are also processed
+  existingLinksTracker.forEach((value) => {
+    content = content.replace(EXISTING_LINK_PLACEHOLDER, value);
   });
 
   // Remove spaces around links: space before [[ and space after ]]
