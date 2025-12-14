@@ -92,6 +92,13 @@ const settings: SettingSchemaDesc[] = [
       "a,b,c,card,now,later,todo,doing,done,wait,waiting,canceled,cancelled,started,in-progress",
     title: "Pages to ignore when generating links",
   },
+  {
+    key: "goToTodayKeybinding",
+    description: "Keybinding to navigate to today's journal page",
+    type: "string",
+    default: "mod+shift+t",
+    title: "Keybinding for Go to Today's Journal",
+  },
 ];
 logseq.useSettingsSchema(settings);
 async function getPages() {
@@ -181,6 +188,25 @@ async function unlinkAllReferencesToPage(pageName: string) {
   } catch (error) {
     console.error({ LogseqAutomaticLinker: "unlinkAllReferencesToPage error", error });
     logseq.App.showMsg(`Error unlinking references: ${error}`, "error");
+  }
+}
+
+/**
+ * Navigate to today's journal page (single page, not journal stream).
+ */
+async function goToTodayJournal() {
+  try {
+    const todayPageName = getDateForPage(new Date(), dateFormat);
+    if (todayPageName) {
+      // Navigate to today's journal page
+      logseq.App.pushState("page", { name: todayPageName });
+      console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName });
+    } else {
+      logseq.App.showMsg("Could not determine today's journal page", "warning");
+    }
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "goToTodayJournal error", error });
+    logseq.App.showMsg(`Error navigating to today's journal: ${error}`, "error");
   }
 }
 
@@ -284,6 +310,14 @@ const main = async () => {
     (e) => {
       getPages();
       parseBlockForLink(e.uuid);
+    }
+  );
+
+  // Register shortcut to go to today's journal page
+  logseq.App.registerCommandShortcut(
+    { binding: logseq.settings?.goToTodayKeybinding },
+    () => {
+      goToTodayJournal();
     }
   );
 };
