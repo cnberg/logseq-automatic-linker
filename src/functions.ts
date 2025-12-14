@@ -106,7 +106,8 @@ export function replaceContentWithPageLinks(
   allPages: string[],
   content: string,
   parseAsTags: boolean,
-  parseSingleWordAsTag: boolean
+  parseSingleWordAsTag: boolean,
+  aliasToOriginalMap: Map<string, string> = new Map()
 ): [string, boolean] {
   // Handle content that should not be automatically linked
   const codeblockReversalTracker = [];
@@ -187,7 +188,9 @@ export function replaceContentWithPageLinks(
       // Use temporary placeholder (index-based) to prevent nested matching
       const newContent = content.replaceAll(chineseRegex, () => {
         const placeholder = `${TEMP_LINK_PLACEHOLDER_PREFIX}${tempLinkIndex++}@@`;
-        const actualLink = parseAsTags ? `#${page}` : `[[${page}]]`;
+        // Check if this page is an alias that should link to original
+        const linkTarget = aliasToOriginalMap.get(page.toLowerCase()) || page;
+        const actualLink = parseAsTags ? `#${linkTarget}` : `[[${linkTarget}]]`;
         tempLinksMap.set(placeholder, actualLink);
         return placeholder;
       });
@@ -206,14 +209,17 @@ export function replaceContentWithPageLinks(
           // If page is lowercase, keep the original case of the input (match);
           // Otherwise, use the page case
           let whichCase = page == page.toLowerCase() ? match : page;
+          
+          // Check if this page is an alias that should link to original
+          const linkTarget = aliasToOriginalMap.get(page.toLowerCase()) || whichCase;
 
           // Use temporary placeholder (index-based) to prevent nested matching
           const placeholder = `${TEMP_LINK_PLACEHOLDER_PREFIX}${tempLinkIndex++}@@`;
           let actualLink: string;
           if (parseAsTags || (parseSingleWordAsTag && !hasSpaces)) {
-            actualLink = hasSpaces ? `#[[${whichCase}]]` : `#${whichCase}`;
+            actualLink = hasSpaces ? `#[[${linkTarget}]]` : `#${linkTarget}`;
           } else {
-            actualLink = `[[${whichCase}]]`;
+            actualLink = `[[${linkTarget}]]`;
           }
           tempLinksMap.set(placeholder, actualLink);
           return placeholder;

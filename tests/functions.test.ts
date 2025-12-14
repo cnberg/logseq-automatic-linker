@@ -525,4 +525,84 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
+
+  // auto-link-to-original tests
+  describe("Alias to original page linking", () => {
+    it("should link alias to original page when mapping is provided", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("bbb", "aaa");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["bbb"],
+        "bbb ccc",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("[[aaa]]ccc");
+      expect(update).toBe(true);
+    });
+
+    it("should link Chinese alias to original page", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("别名", "原始页面");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["别名"],
+        "这是别名的内容",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("这是[[原始页面]]的内容");
+      expect(update).toBe(true);
+    });
+
+    it("should not affect pages without alias mapping", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("bbb", "aaa");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["ccc", "bbb"],
+        "ccc and bbb here",
+        false,
+        false,
+        aliasMap
+      );
+      // ccc links to itself, bbb links to aaa
+      expect(content).toBe("[[ccc]]and[[aaa]]here");
+      expect(update).toBe(true);
+    });
+
+    it("should handle alias mapping with tags", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("alias", "original");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["alias"],
+        "this is alias here",
+        true,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("this is#original here");
+      expect(update).toBe(true);
+    });
+
+    it("should handle case-insensitive alias matching", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("bbb", "aaa"); // lowercase key
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["BBB"], // uppercase in page list
+        "BBB here",
+        false,
+        false,
+        aliasMap
+      );
+      // Should link to original "aaa"
+      expect(content).toBe("[[aaa]]here");
+      expect(update).toBe(true);
+    });
+  });
 });

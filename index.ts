@@ -8,6 +8,8 @@ import { replaceContentWithPageLinks, clearRegexCache } from "./src/functions";
 let pageList: string[] = [];
 let blockArray: string[] = [];
 let dateFormat = "";
+// Map from alias (lowercase) to original page name for pages with auto-link-to-original:: true
+let aliasToOriginalMap: Map<string, string> = new Map();
 
 async function fetchAliases() {
   //from https://github.com/sawhney17/logseq-smartblocks
@@ -42,10 +44,46 @@ async function fetchPropertyIgnoreList() {
     .map((item) =>
       [
         item[0]["name"].toUpperCase(),
-        item[0].properties.alias?.map((alias) => alias.toUpperCase()) ?? [],
+        item[0].properties.alias?.map((alias: string) => alias.toUpperCase()) ?? [],
       ].flat()
     )
     .flat();
+}
+
+/**
+ * Fetch pages with auto-link-to-original:: true and build a map from alias to original page name.
+ * When an alias is matched, it will be linked to the original page name instead.
+ */
+async function fetchAliasToOriginalMap(): Promise<Map<string, string>> {
+  let query = `
+  [:find (pull ?b [*])
+             :where
+             [?b :block/properties ?p]
+             [(get ?p :auto-link-to-original)]]
+  `;
+  let result = await logseq.DB.datascriptQuery(query);
+  const map = new Map<string, string>();
+  
+  result
+    .filter(
+      (item) =>
+        item[0]["name"] && item[0].properties["auto-link-to-original"] && item[0].properties.alias
+    )
+    .forEach((item) => {
+      const originalName = item[0]["name"];
+      const aliases = item[0].properties.alias;
+      if (Array.isArray(aliases)) {
+        aliases.forEach((alias: string) => {
+          // Store lowercase alias -> original name mapping
+          map.set(alias.toLowerCase(), originalName);
+        });
+      } else if (typeof aliases === "string") {
+        map.set(aliases.toLowerCase(), originalName);
+      }
+    });
+  
+  console.log({ LogseqAutomaticLinker: "fetchAliasToOriginalMap", map });
+  return map;
 }
 
 const settings: SettingSchemaDesc[] = [
@@ -103,6 +141,9 @@ const settings: SettingSchemaDesc[] = [
 logseq.useSettingsSchema(settings);
 async function getPages() {
   const propertyBasedIgnoreList = await fetchPropertyIgnoreList();
+  // Fetch alias to original page name mapping
+  aliasToOriginalMap = await fetchAliasToOriginalMap();
+  
   let pagesToIgnore = logseq.settings?.pagesToIgnore
     .split(",")
     .map((x) => x.toUpperCase().trim())
@@ -234,7 +275,8 @@ async function parseBlockForLink(d: string) {
       pageList,
       content,
       logseq.settings?.parseAsTags,
-      logseq.settings?.parseSingleWordAsTag
+      logseq.settings?.parseSingleWordAsTag,
+      aliasToOriginalMap
     );
     if (needsUpdate) {
       logseq.Editor.updateBlock(block.uuid, `${content}`);

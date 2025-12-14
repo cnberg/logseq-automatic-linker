@@ -25,6 +25,11 @@ Requires logseq version 0.67 and above to function properly
   1. Add a property. `auto-link-ignore:: true`
   2. This page, and all its aliases, will now be ignored from auto linking! (Thanks [@trashhalo](https://github.com/trashhalo))
 
+- Linking aliases to original page name
+  1. Add a property. `auto-link-to-original:: true`
+  2. When an alias of this page is matched, it will link to the original page name instead of the alias.
+  3. Example: Page `[[aaa]]` with `alias:: bbb` and `auto-link-to-original:: true`. When text "bbb" is matched, it becomes `[[aaa]]` instead of `[[bbb]]`.
+
 ## Development
 
 1.  Fork the repo.
