@@ -196,6 +196,22 @@ export function replaceContentWithPageLinks(
     }
   });
 
+  // Remove spaces around links: space before [[ and space after ]]
+  // Only remove spaces that are between non-whitespace characters and links
+  // This preserves indentation at line start and doesn't affect other formatting
+  const contentBeforeSpaceCleanup = content;
+  // Remove space before [[ (but not at line start)
+  content = content.replace(/(?<=\S) +\[\[/g, "[[");
+  // Remove space after ]] (but not at line end)
+  content = content.replace(/\]\] +(?=\S)/g, "]]");
+  // Remove space before #[[ (but not at line start)
+  content = content.replace(/(?<=\S) +#\[\[/g, "#[[");
+  // Remove space before # tags (but not at line start, and only for simple tags)
+  content = content.replace(/(?<=\S) +#(?=[^\s\[#])/g, "#");
+  if (content !== contentBeforeSpaceCleanup) {
+    needsUpdate = true;
+  }
+
   // Restore content that should not be automatically linked
   codeblockReversalTracker?.forEach((value, index) => {
     content = content.replace(CODE_BLOCK_PLACEHOLDER, value);

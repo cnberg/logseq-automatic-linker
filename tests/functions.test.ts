@@ -8,8 +8,9 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      "[[page]] before ```\npage within code block\n```\n[[page]] between\n```\nanother page within code block```\nand finally\n```\nwith `single` backticks and page within\n```\n[[page]] after"
+      "[[page]]before ```\npage within code block\n```\n[[page]]between\n```\nanother page within code block```\nand finally\n```\nwith `single` backticks and page within\n```\n[[page]]after"
     );
     expect(update).toBe(true);
   });
@@ -21,8 +22,9 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      "[[Page]] before\n`page inside inline code`\n[[page]] between\n`another page inline`\n`but not page if inline\nblock is split between newlines`\n[[page]] after"
+      "[[Page]]before\n`page inside inline code`\n[[page]]between\n`another page inline`\n`but not page if inline\nblock is split between newlines`\n[[page]]after"
     );
     expect(update).toBe(true);
   });
@@ -36,8 +38,9 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      `Some [[page]] here with [[price]]
+      `Some[[page]]here with[[price]]
         price:: 123
         page:: this is a property`
     );
@@ -53,9 +56,10 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      `This [[page]] has a [[link]]: [page link will not be touched](http://a.com)
-      [another page](http://b.com) also with a [[link]]
+      `This[[page]]has a[[link]]: [page link will not be touched](http://a.com)
+      [another page](http://b.com) also with a[[link]]
       [\\[This\\] is a Logseq page](https://logseq.com)`
     );
     expect(update).toBe(true);
@@ -120,50 +124,52 @@ describe("replaceContentWithPageLinks()", () => {
       false
     );
 
+    // Spaces around links are removed
     expect(content).toEqual(
       `${customQueries[0]}
       
-      Ths sentence contains a [[link]]
+      Ths sentence contains a[[link]]
       
       ${customQueries[1]}`
     );
     expect(update).toBe(true);
   });
 
+  // Spaces around links are removed in all these cases
   it.each([
     {
       input: "NOW [#A] A started todo",
-      expected: "NOW [#A] A started [[todo]]",
+      expected: "NOW [#A] A started[[todo]]",
     },
     {
       input: "LATER [#B] A todo for later",
-      expected: "LATER [#B] A [[todo]] for [[Later]]",
+      expected: "LATER [#B] A[[todo]]for[[Later]]",
     },
     {
       input: "DOING [#A] Fix the todo marker issue",
-      expected: "DOING [#A] Fix the [[todo]] marker issue",
+      expected: "DOING [#A] Fix the[[todo]]marker issue",
     },
-    { input: "DONE A done todo", expected: "DONE A [[Done]] [[todo]]" },
+    { input: "DONE A done todo", expected: "DONE A[[Done]][[todo]]" },
     {
       input: "CANCELED A canceled todo",
-      expected: "CANCELED A [[Canceled]] [[todo]]",
+      expected: "CANCELED A[[Canceled]][[todo]]",
     },
     {
       input: "CANCELLED A cancelled todo",
-      expected: "CANCELLED A [[Cancelled]] [[todo]]",
+      expected: "CANCELLED A[[Cancelled]][[todo]]",
     },
     {
       input: "IN-PROGRESS An in progress To Do",
-      expected: "IN-PROGRESS An [[In Progress]] [[To Do]]",
+      expected: "IN-PROGRESS An[[In Progress]][[To Do]]",
     },
-    { input: "TODO A todo", expected: "TODO A [[todo]]" },
+    { input: "TODO A todo", expected: "TODO A[[todo]]" },
     {
       input: "WAIT [#C] A todo waiting to be unblocked",
-      expected: "WAIT [#C] A [[todo]] [[Waiting]] to be unblocked",
+      expected: "WAIT [#C] A[[todo]][[Waiting]]to be unblocked",
     },
     {
       input: "WAITING A waiting todo",
-      expected: "WAITING A [[Waiting]] [[todo]]",
+      expected: "WAITING A[[Waiting]][[todo]]",
     },
   ])("should preserve the to do marker for $input", ({ input, expected }) => {
     let [content, update] = replaceContentWithPageLinks(
@@ -196,7 +202,8 @@ describe("replaceContentWithPageLinks()", () => {
       true,
       false
     );
-    expect(content).toBe("This #page has #[[multiple words]]");
+    // Spaces around tags are removed
+    expect(content).toBe("This#page has#[[multiple words]]");
     expect(update).toBe(true);
   });
 
@@ -207,8 +214,9 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       true
     );
+    // Spaces around links/tags are removed
     expect(content).toBe(
-      "This #one becomes a tag but [[multiple words]] get brackets"
+      "This#one becomes a tag but[[multiple words]]get brackets"
     );
     expect(update).toBe(true);
   });
@@ -233,10 +241,11 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      `[[When]] creating [[links]], the original case that was typed should be preserved
-      [[for PAGES]] that only have lowercase words.
-      [[Because]] [[logSEQ]] [[LINKS]] are case-insensitive anyway.`
+      `[[When]]creating[[links]], the original case that was typed should be preserved
+      [[for PAGES]]that only have lowercase words.
+      [[Because]][[logSEQ]][[LINKS]]are case-insensitive anyway.`
     );
     expect(update).toBe(true);
   });
@@ -252,11 +261,12 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
       `When creating links, the page case should be used when it's not lowercase.
-      So things like names are properly capitalised even when typed in lowercase: [[John Doe]], [[Mary Doe]].
-      [[Logseq]] LINKS are case-insensitive [[ANYWAY]].
-      [[But]] [[Logseq]] will keep the case of pages that are uppercase or title case when displaying,
+      So things like names are properly capitalised even when typed in lowercase:[[John Doe]],[[Mary Doe]].
+      [[Logseq]]LINKS are case-insensitive[[ANYWAY]].
+      [[But]][[Logseq]]will keep the case of pages that are uppercase or title case when displaying,
       even if you type them in lowercase`
     );
     expect(update).toBe(true);
@@ -269,8 +279,9 @@ describe("replaceContentWithPageLinks()", () => {
       false,
       false
     );
+    // Spaces around links are removed
     expect(content).toBe(
-      `This block implicitly contains unicode words like [[가나다]].`
+      `This block implicitly contains unicode words like[[가나다]].`
     );
   });
 
@@ -330,7 +341,8 @@ describe("replaceContentWithPageLinks()", () => {
         false,
         false
       );
-      expect(content).toBe("This contains a rare character: [[㐀]]");
+      // Spaces around links are removed
+      expect(content).toBe("This contains a rare character:[[㐀]]");
       expect(update).toBe(true);
     });
 
@@ -376,8 +388,9 @@ describe("replaceContentWithPageLinks()", () => {
         false,
         false
       );
+      // Spaces around links are removed (including before ```)
       expect(content).toBe(
-        "这是[[测试]] ```\n代码中的测试\n``` 代码后的[[测试]]"
+        "这是[[测试]]```\n代码中的测试\n``` 代码后的[[测试]]"
       );
       expect(update).toBe(true);
     });
@@ -390,6 +403,66 @@ describe("replaceContentWithPageLinks()", () => {
         false
       );
       expect(content).toBe("学习[[C++编程]]和[[Node.js开发]]的技巧。");
+      expect(update).toBe(true);
+    });
+  });
+
+  // Space removal around links tests
+  describe("Space removal around links", () => {
+    it("should remove spaces before [[ and after ]]", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["test"],
+        "This is a test word",
+        false,
+        false
+      );
+      expect(content).toBe("This is a[[test]]word");
+      expect(update).toBe(true);
+    });
+
+    it("should remove spaces around multiple links", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["foo", "bar"],
+        "This foo and bar here",
+        false,
+        false
+      );
+      expect(content).toBe("This[[foo]]and[[bar]]here");
+      expect(update).toBe(true);
+    });
+
+    it("should preserve line-start indentation", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["test"],
+        "  test at start with indent",
+        false,
+        false
+      );
+      // Line-start spaces are preserved
+      expect(content).toBe("  [[test]]at start with indent");
+      expect(update).toBe(true);
+    });
+
+    it("should remove spaces around tags", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["tag"],
+        "This tag here",
+        true,
+        false
+      );
+      expect(content).toBe("This#tag here");
+      expect(update).toBe(true);
+    });
+
+    it("should handle existing links with spaces", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["other"],
+        "Text with [[existing]] link and other word",
+        false,
+        false
+      );
+      // Spaces around existing and new links are removed
+      expect(content).toBe("Text with[[existing]]link and[[other]]word");
       expect(update).toBe(true);
     });
   });
