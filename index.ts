@@ -119,6 +119,71 @@ async function getPages() {
   });
 }
 
+/**
+ * Remove all links to a specific page from all blocks that reference it.
+ * This will convert [[PageName]], #PageName, and #[[PageName]] to plain text.
+ */
+async function unlinkAllReferencesToPage(pageName: string) {
+  // Query all blocks that reference this page
+  const query = `
+    [:find (pull ?b [:block/uuid :block/content])
+     :where
+     [?p :block/name "${pageName.toLowerCase()}"]
+     [?b :block/refs ?p]]
+  `;
+
+  try {
+    const results = await logseq.DB.datascriptQuery(query);
+    if (!results || results.length === 0) {
+      logseq.App.showMsg(`No references to "${pageName}" found`, "warning");
+      return;
+    }
+
+    let updatedCount = 0;
+    for (const result of results) {
+      const block = result[0];
+      if (!block || !block.content) continue;
+
+      let content = block.content;
+      const originalContent = content;
+
+      // Create regex patterns to match different link formats (case-insensitive)
+      const escapedPageName = pageName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+      // Match [[PageName]] - wiki link format
+      const wikiLinkRegex = new RegExp(`\\[\\[${escapedPageName}\\]\\]`, "gi");
+      content = content.replace(wikiLinkRegex, pageName);
+
+      // Match #[[PageName]] - tag with brackets format
+      const tagBracketRegex = new RegExp(`#\\[\\[${escapedPageName}\\]\\]`, "gi");
+      content = content.replace(tagBracketRegex, pageName);
+
+      // Match #PageName - simple tag format (only if not followed by [[)
+      // Need to be careful not to match partial words
+      const tagRegex = new RegExp(`#${escapedPageName}(?![\\[\\w])`, "gi");
+      content = content.replace(tagRegex, pageName);
+
+      if (content !== originalContent) {
+        await logseq.Editor.updateBlock(block.uuid, content);
+        updatedCount++;
+      }
+    }
+
+    logseq.App.showMsg(
+      `Unlinked "${pageName}" from ${updatedCount} block(s)`,
+      "success"
+    );
+    console.log({
+      LogseqAutomaticLinker: "unlinkAllReferencesToPage",
+      pageName,
+      updatedCount,
+    });
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "unlinkAllReferencesToPage error", error });
+    logseq.App.showMsg(`Error unlinking references: ${error}`, "error");
+  }
+}
+
 async function parseBlockForLink(d: string) {
   if (d != null) {
     let block = await logseq.Editor.getBlock(d);
@@ -174,6 +239,18 @@ const main = async () => {
   logseq.Editor.registerBlockContextMenuItem("Parse Block for Links", (e) => {
     return parseBlockForLink(e.uuid);
   });
+
+  // Register page menu item to unlink all references to the current page
+  logseq.Editor.registerPageMenuItem(
+    "Unlink all references to this page",
+    async (e) => {
+      const page = await logseq.Editor.getPage(e.page);
+      if (page) {
+        const pageName = page.originalName || page.name;
+        unlinkAllReferencesToPage(pageName);
+      }
+    }
+  );
   logseq.App.registerCommandShortcut(
     { binding: logseq.settings?.stateKeybinding },
     () => {
