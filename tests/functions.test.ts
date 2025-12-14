@@ -273,4 +273,124 @@ describe("replaceContentWithPageLinks()", () => {
       `This block implicitly contains unicode words like [[가나다]].`
     );
   });
+
+  // Chinese character detection tests
+  describe("Chinese character handling", () => {
+    it("should link pure Chinese page names", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["测试", "笔记"],
+        "这是一个测试，用于验证笔记功能。",
+        false,
+        false
+      );
+      expect(content).toBe("这是一个[[测试]]，用于验证[[笔记]]功能。");
+      expect(update).toBe(true);
+    });
+
+    it("should link mixed Chinese-English page names", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["测试Test", "Logseq笔记"],
+        "这是测试Test的内容，还有Logseq笔记的链接。",
+        false,
+        false
+      );
+      expect(content).toBe(
+        "这是[[测试Test]]的内容，还有[[Logseq笔记]]的链接。"
+      );
+      expect(update).toBe(true);
+    });
+
+    it("should not double-link already linked Chinese pages", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["测试"],
+        "这是[[测试]]和测试的内容。",
+        false,
+        false
+      );
+      expect(content).toBe("这是[[测试]]和[[测试]]的内容。");
+      expect(update).toBe(true);
+    });
+
+    it("should handle Chinese pages with tags", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["中文标签"],
+        "这是一个中文标签的测试。",
+        true,
+        false
+      );
+      expect(content).toBe("这是一个#中文标签的测试。");
+      expect(update).toBe(true);
+    });
+
+    it("should handle CJK Extension A characters (rare Chinese characters)", () => {
+      // 㐀 is U+3400, first character in CJK Extension A
+      let [content, update] = replaceContentWithPageLinks(
+        ["㐀"],
+        "This contains a rare character: 㐀",
+        false,
+        false
+      );
+      expect(content).toBe("This contains a rare character: [[㐀]]");
+      expect(update).toBe(true);
+    });
+
+    it("should handle multiple Chinese pages in the same content", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["项目管理", "知识管理", "日程安排"],
+        "今天的项目管理会议讨论了知识管理和日程安排的问题。",
+        false,
+        false
+      );
+      expect(content).toBe(
+        "今天的[[项目管理]]会议讨论了[[知识管理]]和[[日程安排]]的问题。"
+      );
+      expect(update).toBe(true);
+    });
+
+    it("should not process empty page names", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["", "测试"],
+        "这是测试内容。",
+        false,
+        false
+      );
+      expect(content).toBe("这是[[测试]]内容。");
+      expect(update).toBe(true);
+    });
+
+    it("should handle Chinese page names with numbers", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["第1章", "版本2.0"],
+        "请阅读第1章，这是版本2.0的内容。",
+        false,
+        false
+      );
+      expect(content).toBe("请阅读[[第1章]]，这是[[版本2.0]]的内容。");
+      expect(update).toBe(true);
+    });
+
+    it("should handle Chinese content in code blocks without linking", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["测试"],
+        "这是测试 ```\n代码中的测试\n``` 代码后的测试",
+        false,
+        false
+      );
+      expect(content).toBe(
+        "这是[[测试]] ```\n代码中的测试\n``` 代码后的[[测试]]"
+      );
+      expect(update).toBe(true);
+    });
+
+    it("should handle Chinese page names with special characters", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["C++编程", "Node.js开发"],
+        "学习C++编程和Node.js开发的技巧。",
+        false,
+        false
+      );
+      expect(content).toBe("学习[[C++编程]]和[[Node.js开发]]的技巧。");
+      expect(update).toBe(true);
+    });
+  });
 });

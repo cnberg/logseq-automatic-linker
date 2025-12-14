@@ -3,7 +3,7 @@ import { SettingSchemaDesc } from "@logseq/libs/dist/LSPlugin.user";
 // @ts-ignore
 import Sherlock from "sherlockjs";
 import { getDateForPage } from "logseq-dateutils";
-import { replaceContentWithPageLinks } from "./src/functions";
+import { replaceContentWithPageLinks, clearRegexCache } from "./src/functions";
 
 let pageList: string[] = [];
 let blockArray: string[] = [];
@@ -113,6 +113,8 @@ async function getPages() {
     pageList = pageList.concat((await fetchAliases()).flat());
     //Reverse sort pagelist on the basis of length so that longer page names are matched first
     pageList.sort((a, b) => b.length - a.length);
+    // Clear regex cache when page list is refreshed
+    clearRegexCache();
     console.log({ LogseqAutomaticLinker: "getPages", results, pageList });
   });
 }
