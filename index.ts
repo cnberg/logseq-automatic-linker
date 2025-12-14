@@ -60,14 +60,14 @@ const settings: SettingSchemaDesc[] = [
     key: "stateKeybinding",
     description: "Keybinding to toggle Automatic Parsing",
     type: "string",
-    default: "mod+shift+l",
+    default: "mod+alt+shift+l",
     title: "Keybinding for Automatic Parsing",
   },
   {
     key: "parseSingleBlockKeybinding",
     description: "Keybinding to parse a single block",
     type: "string",
-    default: "mod+p",
+    default: "mod+shift+l",
     title: "Keybinding for Parsing a Single Block",
   },
   {
