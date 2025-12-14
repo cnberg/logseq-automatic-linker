@@ -196,8 +196,11 @@ async function unlinkAllReferencesToPage(pageName: string) {
  */
 async function goToTodayJournal() {
   try {
-    const todayPageName = getDateForPage(new Date(), dateFormat);
+    // getDateForPage returns format like "[[2025/12/14]]", we need to strip the brackets
+    let todayPageName = getDateForPage(new Date(), dateFormat);
     if (todayPageName) {
+      // Remove [[ and ]] if present
+      todayPageName = todayPageName.replace(/^\[\[/, "").replace(/\]\]$/, "");
       // Navigate to today's journal page
       logseq.App.pushState("page", { name: todayPageName });
       console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName });
