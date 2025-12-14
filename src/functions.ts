@@ -26,14 +26,19 @@ function containsCJK(s: string): boolean {
   return CJK_REGEX.test(s);
 }
 
+// CJK character ranges for boundary detection (same as CJK_REGEX but as string for use in regex)
+const CJK_BOUNDARY_CHARS = "\\u4e00-\\u9fff\\u3400-\\u4dbf\\uf900-\\ufaff";
+
 // Get or create cached regex for a page
 function getPageRegex(page: string): RegExp {
   const cacheKey = page;
   if (!regexCache.has(cacheKey)) {
+    // Include CJK characters as word boundaries so "中文abc中文" can match "abc"
+    const boundaryChars = `[\\s,.:;"'${CJK_BOUNDARY_CHARS}]`;
     const regex = new RegExp(
-      `(\\w*(?<!\\[{2}[^[\\]]*)\\w*(?<!\\#)\\w*(?<!\\w+:\\/\\/\\S*))(?<=[\\s,.:;"']|^)(${parseForRegex(
+      `(\\w*(?<!\\[{2}[^[\\]]*)\\w*(?<!\\#)\\w*(?<!\\w+:\\/\\/\\S*))(?<=${boundaryChars}|^)(${parseForRegex(
         page
-      )})(?![^[\\]]*\\]{2})(?=[\\s,.:;"']|$)`,
+      )})(?![^[\\]]*\\]{2})(?=${boundaryChars}|$)`,
       "gi"
     );
     regexCache.set(cacheKey, regex);

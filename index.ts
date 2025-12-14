@@ -37,11 +37,11 @@ async function fetchPropertyIgnoreList() {
   return result
     .filter(
       (item) =>
-        item[0]["original-name"] && item[0].properties["automatic-ignore"]
+        item[0]["name"] && item[0].properties["automatic-ignore"]
     )
     .map((item) =>
       [
-        item[0]["original-name"].toUpperCase(),
+        item[0]["name"].toUpperCase(),
         item[0].properties.alias?.map((alias) => alias.toUpperCase()) ?? [],
       ].flat()
     )

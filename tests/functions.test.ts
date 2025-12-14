@@ -501,5 +501,28 @@ describe("replaceContentWithPageLinks()", () => {
       expect(content).toBe("这是[[一二三四]]和[[二三]]的内容");
       expect(update).toBe(true);
     });
+
+    it("should link English page surrounded by Chinese characters", () => {
+      // Bug fix: "中文abc中文" should link to [[abc]]
+      let [content, update] = replaceContentWithPageLinks(
+        ["abc"],
+        "中文abc中文",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[abc]]中文");
+      expect(update).toBe(true);
+    });
+
+    it("should link English page at various positions in Chinese text", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["test", "hello"],
+        "开始test中间hello结束",
+        false,
+        false
+      );
+      expect(content).toBe("开始[[test]]中间[[hello]]结束");
+      expect(update).toBe(true);
+    });
   });
 });
