@@ -4,6 +4,7 @@ import { SettingSchemaDesc } from "@logseq/libs/dist/LSPlugin.user";
 import Sherlock from "sherlockjs";
 import { getDateForPage } from "logseq-dateutils";
 import { replaceContentWithPageLinks, clearRegexCache } from "./src/functions";
+import { splitBlock } from "./src/splitBlock";
 
 let pageList: string[] = [];
 let blockArray: string[] = [];
@@ -254,6 +255,35 @@ async function goToTodayJournal() {
   }
 }
 
+/**
+ * Split a block into multiple blocks based on newlines.
+ * Preserves indentation hierarchy.
+ */
+async function splitBlockAction(blockId: string) {
+  const block = await logseq.Editor.getBlock(blockId);
+  if (!block) {
+    return;
+  }
+  
+  const newBlocks = splitBlock(block.content).map((b) => {
+    return {
+      ...b,
+      children: b.children && b.children.length ? b.children : undefined,
+    };
+  });
+  
+  if (newBlocks.length === 0) {
+    return;
+  }
+  
+  await logseq.Editor.insertBatchBlock(block.uuid, newBlocks, {
+    sibling: true,
+  });
+  await logseq.Editor.removeBlock(block.uuid);
+  
+  console.log({ LogseqAutomaticLinker: "splitBlockAction", blockId, newBlocksCount: newBlocks.length });
+}
+
 async function parseBlockForLink(d: string) {
   if (d != null) {
     let block = await logseq.Editor.getBlock(d);
@@ -309,6 +339,15 @@ const main = async () => {
   logseq.App.onCurrentGraphChanged(getPages);
   logseq.Editor.registerBlockContextMenuItem("Parse Block for Links", (e) => {
     return parseBlockForLink(e.uuid);
+  });
+
+  // Register Split Block functionality
+  logseq.Editor.registerBlockContextMenuItem("Split Block", (e) => {
+    return splitBlockAction(e.uuid);
+  });
+
+  logseq.Editor.registerSlashCommand("Split Block", (e) => {
+    return splitBlockAction(e.uuid);
   });
 
   // Register page menu item to unlink all references to the current page
