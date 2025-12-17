@@ -238,14 +238,16 @@ async function unlinkAllReferencesToPage(pageName: string) {
  */
 async function goToTodayJournal() {
   try {
+    // Always fetch the latest date format from user config
+    const currentDateFormat = (await logseq.App.getUserConfigs()).preferredDateFormat;
     // getDateForPage returns format like "[[2025/12/14]]", we need to strip the brackets
-    let todayPageName = getDateForPage(new Date(), dateFormat);
+    let todayPageName = getDateForPage(new Date(), currentDateFormat);
     if (todayPageName) {
       // Remove [[ and ]] if present
       todayPageName = todayPageName.replace(/^\[\[/, "").replace(/\]\]$/, "");
       // Navigate to today's journal page
       logseq.App.pushState("page", { name: todayPageName });
-      console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName });
+      console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName, currentDateFormat });
     } else {
       logseq.App.showMsg("Could not determine today's journal page", "warning");
     }
