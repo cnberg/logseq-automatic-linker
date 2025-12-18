@@ -138,6 +138,13 @@ const settings: SettingSchemaDesc[] = [
     default: "mod+shift+t",
     title: "Keybinding for Go to Today's Journal",
   },
+  {
+    key: "journalDateFormat",
+    description: "Date format for journal pages (e.g., yyyy/MM/dd, MMM do, yyyy)",
+    type: "string",
+    default: "yyyy/MM/dd",
+    title: "Journal Date Format",
+  },
 ];
 logseq.useSettingsSchema(settings);
 async function getPages() {
@@ -238,19 +245,16 @@ async function unlinkAllReferencesToPage(pageName: string) {
  */
 async function goToTodayJournal() {
   try {
-    // Always fetch the latest config from user
-    const userConfigs = await logseq.App.getUserConfigs();
-    console.log({ LogseqAutomaticLinker: "goToTodayJournal userConfigs", userConfigs });
-    
-    const currentDateFormat = userConfigs.preferredDateFormat;
+    // Use configured date format, default to yyyy/MM/dd
+    const journalDateFormat = logseq.settings?.journalDateFormat || "yyyy/MM/dd";
     // getDateForPage returns format like "[[2025/12/14]]", we need to strip the brackets
-    let todayPageName = getDateForPage(new Date(), currentDateFormat);
+    let todayPageName = getDateForPage(new Date(), journalDateFormat);
     if (todayPageName) {
       // Remove [[ and ]] if present
       todayPageName = todayPageName.replace(/^\[\[/, "").replace(/\]\]$/, "");
       // Navigate to today's journal page
       logseq.App.pushState("page", { name: todayPageName });
-      console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName, currentDateFormat });
+      console.log({ LogseqAutomaticLinker: "goToTodayJournal", todayPageName, journalDateFormat });
     } else {
       logseq.App.showMsg("Could not determine today's journal page", "warning");
     }
