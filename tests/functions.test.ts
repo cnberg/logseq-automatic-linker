@@ -689,4 +689,88 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
+
+  // Test converting existing alias links to original page names
+  describe("Convert existing alias links to original", () => {
+    it("should convert [[alias]] to [[original]] when auto-link-to-original is set", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("bbb", "aaa");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],  // no pages to link, just convert existing
+        "This has [[bbb]] link",
+        false,
+        false,
+        aliasMap
+      );
+      // Spaces around links are removed
+      expect(content).toBe("This has[[aaa]]link");
+      expect(update).toBe(true);
+    });
+
+    it("should convert #[[alias]] to #[[original]]", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("alias", "original");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "Tagged with #[[alias]] here",
+        false,
+        false,
+        aliasMap
+      );
+      // Spaces around links are removed
+      expect(content).toBe("Tagged with#[[original]]here");
+      expect(update).toBe(true);
+    });
+
+    it("should not convert if link is already original page name", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("alias", "original");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "This has [[original]] link",
+        false,
+        false,
+        aliasMap
+      );
+      // Spaces around links are removed even if no conversion
+      expect(content).toBe("This has[[original]]link");
+      // update is true because spaces were removed
+      expect(update).toBe(true);
+    });
+
+    it("should convert Chinese alias links", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("别名", "原始页面");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "这里有[[别名]]链接",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("这里有[[原始页面]]链接");
+      expect(update).toBe(true);
+    });
+
+    it("should handle multiple alias links in same content", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("a1", "original1");
+      aliasMap.set("a2", "original2");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "First [[a1]] and second [[a2]]",
+        false,
+        false,
+        aliasMap
+      );
+      // Spaces around links are removed
+      expect(content).toBe("First[[original1]]and second[[original2]]");
+      expect(update).toBe(true);
+    });
+  });
 });

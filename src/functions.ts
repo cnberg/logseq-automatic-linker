@@ -299,8 +299,33 @@ export function replaceContentWithPageLinks(
   });
 
   // Restore existing links before space cleanup so they are also processed
+  // Also convert alias links to original page names if auto-link-to-original is set
   existingLinksTracker.forEach((value) => {
-    content = content.replace(EXISTING_LINK_PLACEHOLDER, value);
+    let restoredValue = value;
+    
+    // Check if this is a link that should be converted to original page name
+    // Match [[PageName]] or #[[PageName]] format
+    const linkMatch = value.match(/^(#?)\[\[([^\[\]]+)\]\]$/);
+    if (linkMatch && aliasToOriginalMap.size > 0) {
+      const prefix = linkMatch[1]; // "#" or ""
+      const linkTarget = linkMatch[2];
+      const originalName = aliasToOriginalMap.get(linkTarget.toLowerCase());
+      
+      if (originalName && originalName.toLowerCase() !== linkTarget.toLowerCase()) {
+        // Convert alias link to original page name
+        restoredValue = `${prefix}[[${originalName}]]`;
+        needsUpdate = true;
+        console.log({
+          LogseqAutomaticLinker: "existing link converted to original",
+          original: value,
+          converted: restoredValue,
+          aliasLower: linkTarget.toLowerCase(),
+          originalName,
+        });
+      }
+    }
+    
+    content = content.replace(EXISTING_LINK_PLACEHOLDER, restoredValue);
   });
 
   // Remove spaces around links: space before [[ and space after ]]
