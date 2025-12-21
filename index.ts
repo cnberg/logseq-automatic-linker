@@ -490,16 +490,55 @@ function processTemplate(template: string, blockContent: string): string {
 }
 
 /**
- * Copy text to clipboard
+ * Copy text to clipboard using multiple fallback methods
  */
 async function copyToClipboard(text: string): Promise<boolean> {
+  // Method 1: Try navigator.clipboard (modern API)
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      console.log({ LogseqAutomaticLinker: "copyToClipboard success via navigator.clipboard" });
+      return true;
+    }
   } catch (error) {
-    console.error({ LogseqAutomaticLinker: "copyToClipboard error", error });
-    return false;
+    console.log({ LogseqAutomaticLinker: "navigator.clipboard failed, trying fallback", error });
   }
+
+  // Method 2: Try using parent window's clipboard (for iframe context)
+  try {
+    if (top?.navigator?.clipboard?.writeText) {
+      await top.navigator.clipboard.writeText(text);
+      console.log({ LogseqAutomaticLinker: "copyToClipboard success via top.navigator.clipboard" });
+      return true;
+    }
+  } catch (error) {
+    console.log({ LogseqAutomaticLinker: "top.navigator.clipboard failed, trying fallback", error });
+  }
+
+  // Method 3: Fallback to execCommand (deprecated but works in more contexts)
+  try {
+    const textArea = top?.document.createElement("textarea") || document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    textArea.style.top = "-9999px";
+    (top?.document.body || document.body).appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    const success = (top?.document || document).execCommand("copy");
+    textArea.remove();
+    
+    if (success) {
+      console.log({ LogseqAutomaticLinker: "copyToClipboard success via execCommand" });
+      return true;
+    }
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "execCommand copy failed", error });
+  }
+
+  console.error({ LogseqAutomaticLinker: "All clipboard methods failed" });
+  return false;
 }
 
 /**
@@ -628,6 +667,13 @@ async function handlePromptSelection(pageName: string) {
   hidePromptUI();
 
   const blockContent = (window as any).__promptBlockContent;
+  console.log({
+    LogseqAutomaticLinker: "handlePromptSelection start",
+    pageName,
+    blockContent,
+    blockContentLength: blockContent?.length,
+  });
+
   if (!blockContent) {
     logseq.App.showMsg("No block content available", "error");
     return;
@@ -635,6 +681,13 @@ async function handlePromptSelection(pageName: string) {
 
   // Get the template content
   const templateContent = await getPageContent(pageName);
+  console.log({
+    LogseqAutomaticLinker: "handlePromptSelection templateContent",
+    pageName,
+    templateContent,
+    templateContentLength: templateContent?.length,
+  });
+
   if (!templateContent) {
     logseq.App.showMsg(`Failed to read template: ${pageName}`, "error");
     return;
@@ -642,6 +695,11 @@ async function handlePromptSelection(pageName: string) {
 
   // Process the template
   const result = processTemplate(templateContent, blockContent);
+  console.log({
+    LogseqAutomaticLinker: "handlePromptSelection result",
+    resultLength: result?.length,
+    resultPreview: result?.substring(0, 200),
+  });
 
   // Copy to clipboard
   const success = await copyToClipboard(result);
@@ -652,11 +710,12 @@ async function handlePromptSelection(pageName: string) {
   }
 
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection",
+    LogseqAutomaticLinker: "handlePromptSelection complete",
+    success,
     pageName,
-    blockContent,
-    templateContent,
-    result,
+    blockContentLength: blockContent?.length,
+    templateContentLength: templateContent?.length,
+    resultLength: result?.length,
   });
 
   // Cleanup
