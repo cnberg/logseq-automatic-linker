@@ -180,10 +180,11 @@ export function replaceContentWithPageLinks(
     return `[[${tagName}]]`;
   });
   
-  // Convert #tag to [[tag]] (simple tags - word characters, CJK, and common punctuation in page names)
+  // Convert #tag to [[tag]] (simple tags - word characters, CJK, namespace paths, and hyphens)
   // Match # followed by word characters (including CJK) that form a valid tag
+  // Supports namespace tags like #ABC/CDE
   // Don't match headers (##), special syntax, or inside brackets
-  content = content.replaceAll(/(?<!\[)#([\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff][\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff-]*)/g, (match, tagName) => {
+  content = content.replaceAll(/(?<!\[)#([\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff][\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\/-]*)/g, (match, tagName) => {
     console.debug({ LogseqAutomaticLinker: "simple tag converted", match, tagName });
     return `[[${tagName}]]`;
   });

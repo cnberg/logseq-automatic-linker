@@ -866,3 +866,14 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
+
+    it("should convert namespace tags with slash", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "This has #ABC/CDE tag",
+        false,
+        false
+      );
+      expect(content).toBe("This has [[ABC/CDE]] tag");
+      expect(update).toBe(true);
+    });
