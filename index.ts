@@ -197,12 +197,20 @@ async function getPages() {
       .filter((x) => !pagesToIgnore.includes(x[0]["name"].toUpperCase()))
       .map((x) => x[0]["name"])
       .filter((x) => x);
-    pageList = pageList.concat((await fetchAliases()).flat());
+    const aliases = (await fetchAliases()).flat();
+    pageList = pageList.concat(aliases);
     //Reverse sort pagelist on the basis of length so that longer page names are matched first
     pageList.sort((a, b) => b.length - a.length);
     // Clear regex cache when page list is refreshed
     clearRegexCache();
-    console.log({ LogseqAutomaticLinker: "getPages", results, pageList });
+    console.log({ 
+      LogseqAutomaticLinker: "getPages completed", 
+      pageCount: results.length,
+      pageListLength: pageList.length,
+      aliasesAdded: aliases,
+      aliasToOriginalMapSize: aliasToOriginalMap.size,
+      aliasToOriginalMapEntries: Array.from(aliasToOriginalMap.entries()),
+    });
   });
 }
 
@@ -325,14 +333,23 @@ async function splitBlockAction(blockId: string) {
 }
 
 async function parseBlockForLink(d: string) {
+  console.log({ 
+    LogseqAutomaticLinker: "parseBlockForLink called", 
+    blockId: d,
+    blockIdType: typeof d,
+    pageListLength: pageList.length,
+    aliasToOriginalMapSize: aliasToOriginalMap.size,
+  });
+  
   if (d != null) {
     let block = await logseq.Editor.getBlock(d);
     if (block == null) {
+      console.log({ LogseqAutomaticLinker: "parseBlockForLink block not found", blockId: d });
       return;
     }
 
     console.log({ 
-      LogseqAutomaticLinker: "parseBlockForLink", 
+      LogseqAutomaticLinker: "parseBlockForLink processing", 
       blockContent: block.content,
       pageListLength: pageList.length,
       pageListSample: pageList.slice(0, 20),
