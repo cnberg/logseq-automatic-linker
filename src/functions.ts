@@ -328,18 +328,24 @@ export function replaceContentWithPageLinks(
     content = content.replace(EXISTING_LINK_PLACEHOLDER, restoredValue);
   });
 
-  // Remove spaces around links: space before [[ and space after ]]
-  // Only remove spaces that are between non-whitespace characters and links
-  // This preserves indentation at line start and doesn't affect other formatting
+  // Remove spaces around links only when adjacent to CJK characters
+  // This preserves English spacing like "word [[link]] word" 
+  // but removes unnecessary spaces in Chinese like "中文 [[link]] 中文" → "中文[[link]]中文"
   const contentBeforeSpaceCleanup = content;
-  // Remove space before [[ (but not at line start)
-  content = content.replace(/(?<=\S) +\[\[/g, "[[");
-  // Remove space after ]] (but not at line end)
-  content = content.replace(/\]\] +(?=\S)/g, "]]");
-  // Remove space before #[[ (but not at line start)
-  content = content.replace(/(?<=\S) +#\[\[/g, "#[[");
-  // Remove space before # tags (but not at line start, and only for simple tags)
-  content = content.replace(/(?<=\S) +#(?=[^\s\[#])/g, "#");
+  // CJK character class for lookbehind/lookahead
+  const cjkPattern = `[\\u4e00-\\u9fff\\u3400-\\u4dbf\\uf900-\\ufaff]`;
+  
+  // Remove space before [[ when preceded by CJK character
+  content = content.replace(new RegExp(`(?<=${cjkPattern}) +\\[\\[`, "g"), "[[");
+  // Remove space after ]] when followed by CJK character
+  content = content.replace(new RegExp(`\\]\\] +(?=${cjkPattern})`, "g"), "]]");
+  // Remove space before #[[ when preceded by CJK character
+  content = content.replace(new RegExp(`(?<=${cjkPattern}) +#\\[\\[`, "g"), "#[[");
+  // Remove space before # tags when preceded by CJK character
+  content = content.replace(new RegExp(`(?<=${cjkPattern}) +#(?=[^\\s\\[#])`, "g"), "#");
+  // Remove space after ]] when followed by CJK punctuation
+  content = content.replace(/\]\] +(?=[，。！？；：])/g, "]]");
+  
   if (content !== contentBeforeSpaceCleanup) {
     needsUpdate = true;
   }
