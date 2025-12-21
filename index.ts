@@ -176,6 +176,20 @@ const settings: SettingSchemaDesc[] = [
     default: "yyyy/MM/dd",
     title: "Journal Date Format",
   },
+  {
+    key: "promptTemplateKeybinding",
+    description: "Keybinding to open prompt template selector",
+    type: "string",
+    default: "mod+shift+g",
+    title: "Keybinding for Prompt Template",
+  },
+  {
+    key: "promptNamespace",
+    description: "Namespace for prompt template pages (e.g., prompt)",
+    type: "string",
+    default: "prompt",
+    title: "Prompt Template Namespace",
+  },
 ];
 logseq.useSettingsSchema(settings);
 async function getPages() {
@@ -384,6 +398,274 @@ async function parseBlockForLink(d: string) {
   }
 }
 
+// ============== Prompt Template Feature ==============
+
+const PROMPT_UI_KEY = "prompt-template-selector";
+
+/**
+ * Fetch all pages under the prompt namespace (e.g., prompt/xxx)
+ */
+async function fetchPromptPages(): Promise<string[]> {
+  const namespace = logseq.settings?.promptNamespace || "prompt";
+  const query = `
+    [:find (pull ?p [:block/name :block/original-name])
+     :where
+     [?p :block/name ?name]
+     [(clojure.string/starts-with? ?name "${namespace.toLowerCase()}/")]]
+  `;
+  
+  try {
+    const results = await logseq.DB.datascriptQuery(query);
+    const pages = results
+      .map((r: any) => r[0]?.["original-name"] || r[0]?.["name"])
+      .filter((name: string) => name);
+    
+    console.log({ LogseqAutomaticLinker: "fetchPromptPages", namespace, pages });
+    return pages;
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "fetchPromptPages error", error });
+    return [];
+  }
+}
+
+/**
+ * Get block content with all children, preserving indentation
+ */
+async function getBlockContentWithChildren(
+  blockId: string,
+  indentLevel: number = 0
+): Promise<string> {
+  const block = await logseq.Editor.getBlock(blockId, { includeChildren: true });
+  if (!block) return "";
+
+  const indent = "  ".repeat(indentLevel);
+  let content = indent + block.content;
+
+  if (block.children && block.children.length > 0) {
+    for (const child of block.children) {
+      const childId = typeof child === "object" ? (child as any).uuid : child;
+      const childContent = await getBlockContentWithChildren(childId, indentLevel + 1);
+      if (childContent) {
+        content += "\n" + childContent;
+      }
+    }
+  }
+
+  return content;
+}
+
+/**
+ * Get the content of a page (all blocks concatenated)
+ */
+async function getPageContent(pageName: string): Promise<string> {
+  const blocks = await logseq.Editor.getPageBlocksTree(pageName);
+  if (!blocks || blocks.length === 0) return "";
+
+  const contents: string[] = [];
+  
+  async function processBlock(block: any, indentLevel: number = 0): Promise<void> {
+    const indent = "  ".repeat(indentLevel);
+    contents.push(indent + block.content);
+    
+    if (block.children && block.children.length > 0) {
+      for (const child of block.children) {
+        await processBlock(child, indentLevel + 1);
+      }
+    }
+  }
+
+  for (const block of blocks) {
+    await processBlock(block, 0);
+  }
+
+  return contents.join("\n");
+}
+
+/**
+ * Process the template: replace {{block-content}} with actual content
+ */
+function processTemplate(template: string, blockContent: string): string {
+  // Only replace the first occurrence
+  return template.replace("{{block-content}}", blockContent);
+}
+
+/**
+ * Copy text to clipboard
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "copyToClipboard error", error });
+    return false;
+  }
+}
+
+/**
+ * Hide the prompt template UI
+ */
+function hidePromptUI() {
+  logseq.provideUI({
+    key: PROMPT_UI_KEY,
+    template: "",
+  });
+}
+
+/**
+ * Show the prompt template selector UI
+ */
+async function showPromptTemplateSelector(blockUuid: string) {
+  const pages = await fetchPromptPages();
+  
+  if (pages.length === 0) {
+    const namespace = logseq.settings?.promptNamespace || "prompt";
+    logseq.App.showMsg(`No pages found in "${namespace}/" namespace`, "warning");
+    return;
+  }
+
+  // Get block content for preview
+  const blockContent = await getBlockContentWithChildren(blockUuid);
+  
+  // Build the UI HTML
+  const listItems = pages
+    .map((page, index) => {
+      const displayName = page.replace(/^prompt\//i, "");
+      return `
+        <div class="prompt-item" data-page="${page}" data-index="${index}"
+             style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #e0e0e0;"
+             onmouseover="this.style.backgroundColor='#f0f0f0'"
+             onmouseout="this.style.backgroundColor='transparent'">
+          ${displayName}
+        </div>
+      `;
+    })
+    .join("");
+
+  const uiTemplate = `
+    <div id="prompt-selector-container" style="
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 300px;
+      max-width: 500px;
+      max-height: 400px;
+      z-index: 9999;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    ">
+      <div style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+        <span>Select Prompt Template</span>
+        <span id="prompt-close-btn" style="cursor: pointer; font-size: 18px; color: #666;">&times;</span>
+      </div>
+      <div style="max-height: 300px; overflow-y: auto;">
+        ${listItems}
+      </div>
+    </div>
+    <div id="prompt-backdrop" style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 9998;
+    "></div>
+  `;
+
+  logseq.provideUI({
+    key: PROMPT_UI_KEY,
+    template: uiTemplate,
+    style: {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+      zIndex: 9998,
+    },
+  });
+
+  // Store block UUID for later use
+  (window as any).__promptBlockUuid = blockUuid;
+  (window as any).__promptBlockContent = blockContent;
+
+  // Set up event listeners after UI is rendered
+  setTimeout(() => {
+    const container = top?.document.getElementById("prompt-selector-container");
+    const backdrop = top?.document.getElementById("prompt-backdrop");
+    const closeBtn = top?.document.getElementById("prompt-close-btn");
+
+    if (backdrop) {
+      backdrop.onclick = () => hidePromptUI();
+    }
+
+    if (closeBtn) {
+      closeBtn.onclick = () => hidePromptUI();
+    }
+
+    if (container) {
+      const items = container.querySelectorAll(".prompt-item");
+      items.forEach((item) => {
+        (item as HTMLElement).onclick = async () => {
+          const pageName = item.getAttribute("data-page");
+          if (pageName) {
+            await handlePromptSelection(pageName);
+          }
+        };
+      });
+    }
+  }, 100);
+}
+
+/**
+ * Handle prompt template selection
+ */
+async function handlePromptSelection(pageName: string) {
+  hidePromptUI();
+
+  const blockContent = (window as any).__promptBlockContent;
+  if (!blockContent) {
+    logseq.App.showMsg("No block content available", "error");
+    return;
+  }
+
+  // Get the template content
+  const templateContent = await getPageContent(pageName);
+  if (!templateContent) {
+    logseq.App.showMsg(`Failed to read template: ${pageName}`, "error");
+    return;
+  }
+
+  // Process the template
+  const result = processTemplate(templateContent, blockContent);
+
+  // Copy to clipboard
+  const success = await copyToClipboard(result);
+  if (success) {
+    logseq.App.showMsg("Copied to clipboard!", "success");
+  } else {
+    logseq.App.showMsg("Failed to copy to clipboard", "error");
+  }
+
+  console.log({
+    LogseqAutomaticLinker: "handlePromptSelection",
+    pageName,
+    blockContent,
+    templateContent,
+    result,
+  });
+
+  // Cleanup
+  delete (window as any).__promptBlockUuid;
+  delete (window as any).__promptBlockContent;
+}
+
+// ============== End Prompt Template Feature ==============
+
 const main = async () => {
   getPages();
   dateFormat = (await logseq.App.getUserConfigs()).preferredDateFormat;
@@ -474,5 +756,24 @@ const main = async () => {
       goToTodayJournal();
     }
   );
+
+  // Register shortcut for prompt template selector
+  logseq.App.registerCommandShortcut(
+    { binding: logseq.settings?.promptTemplateKeybinding },
+    async (e) => {
+      if (e.uuid) {
+        await showPromptTemplateSelector(e.uuid);
+      } else {
+        logseq.App.showMsg("Please focus on a block first", "warning");
+      }
+    }
+  );
+
+  // Register slash command for prompt template
+  logseq.Editor.registerSlashCommand("Apply Prompt Template", async (e) => {
+    if (e.uuid) {
+      await showPromptTemplateSelector(e.uuid);
+    }
+  });
 };
 logseq.ready(main).catch(console.error);
