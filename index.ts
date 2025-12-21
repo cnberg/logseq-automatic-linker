@@ -65,6 +65,16 @@ async function fetchAliasToOriginalMap(): Promise<Map<string, string>> {
   let result = await logseq.DB.datascriptQuery(query);
   const map = new Map<string, string>();
   
+  console.log({ 
+    LogseqAutomaticLinker: "fetchAliasToOriginalMap raw result", 
+    resultCount: result?.length,
+    result: result?.map((item: any) => ({
+      name: item[0]?.["name"],
+      originalName: item[0]?.["original-name"],
+      properties: item[0]?.properties,
+    })),
+  });
+  
   result
     .filter(
       (item) =>
@@ -73,17 +83,38 @@ async function fetchAliasToOriginalMap(): Promise<Map<string, string>> {
     .forEach((item) => {
       const originalName = item[0]["name"];
       const aliases = item[0].properties.alias;
+      console.log({
+        LogseqAutomaticLinker: "fetchAliasToOriginalMap processing",
+        originalName,
+        aliases,
+        aliasType: typeof aliases,
+        isArray: Array.isArray(aliases),
+      });
       if (Array.isArray(aliases)) {
         aliases.forEach((alias: string) => {
           // Store lowercase alias -> original name mapping
           map.set(alias.toLowerCase(), originalName);
+          console.log({
+            LogseqAutomaticLinker: "fetchAliasToOriginalMap added",
+            aliasKey: alias.toLowerCase(),
+            originalName,
+          });
         });
       } else if (typeof aliases === "string") {
         map.set(aliases.toLowerCase(), originalName);
+        console.log({
+          LogseqAutomaticLinker: "fetchAliasToOriginalMap added (string)",
+          aliasKey: aliases.toLowerCase(),
+          originalName,
+        });
       }
     });
   
-  console.log({ LogseqAutomaticLinker: "fetchAliasToOriginalMap", map });
+  console.log({ 
+    LogseqAutomaticLinker: "fetchAliasToOriginalMap final", 
+    mapSize: map.size,
+    entries: Array.from(map.entries()),
+  });
   return map;
 }
 
@@ -300,7 +331,14 @@ async function parseBlockForLink(d: string) {
       return;
     }
 
-    console.log({ LogseqAutomaticLinker: "parseBlockForLink", block });
+    console.log({ 
+      LogseqAutomaticLinker: "parseBlockForLink", 
+      blockContent: block.content,
+      pageListLength: pageList.length,
+      pageListSample: pageList.slice(0, 20),
+      aliasToOriginalMapSize: aliasToOriginalMap.size,
+      aliasToOriginalMapEntries: Array.from(aliasToOriginalMap.entries()),
+    });
 
     let content = block.content.replaceAll(/{.*}/g, (match) => {
       return getDateForPage(
@@ -317,6 +355,12 @@ async function parseBlockForLink(d: string) {
       logseq.settings?.parseSingleWordAsTag,
       aliasToOriginalMap
     );
+    console.log({
+      LogseqAutomaticLinker: "parseBlockForLink result",
+      originalContent: block.content,
+      newContent: content,
+      needsUpdate,
+    });
     if (needsUpdate) {
       logseq.Editor.updateBlock(block.uuid, `${content}`);
     }

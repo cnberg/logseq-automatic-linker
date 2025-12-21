@@ -174,6 +174,15 @@ export function replaceContentWithPageLinks(
   const tempLinksMap: Map<string, string> = new Map();
   let tempLinkIndex = 0;
 
+  console.log({
+    LogseqAutomaticLinker: "replaceContentWithPageLinks start",
+    contentLength: content.length,
+    contentPreview: content.substring(0, 100),
+    allPagesCount: allPages.length,
+    aliasMapSize: aliasToOriginalMap.size,
+    aliasMapEntries: Array.from(aliasToOriginalMap.entries()),
+  });
+
   allPages.forEach((page) => {
     // Skip empty pages
     if (page.length === 0) {
@@ -191,6 +200,14 @@ export function replaceContentWithPageLinks(
         // Check if this page is an alias that should link to original
         const linkTarget = aliasToOriginalMap.get(page.toLowerCase()) || page;
         const actualLink = parseAsTags ? `#${linkTarget}` : `[[${linkTarget}]]`;
+        console.log({
+          LogseqAutomaticLinker: "CJK page matched",
+          page,
+          pageLower: page.toLowerCase(),
+          aliasLookup: aliasToOriginalMap.get(page.toLowerCase()),
+          linkTarget,
+          actualLink,
+        });
         tempLinksMap.set(placeholder, actualLink);
         return placeholder;
       });
@@ -203,6 +220,13 @@ export function replaceContentWithPageLinks(
       if (content.toUpperCase().includes(page.toUpperCase())) {
         // Use cached regex for non-Chinese pages
         const regex = getPageRegex(page);
+        console.log({
+          LogseqAutomaticLinker: "non-CJK page checking",
+          page,
+          pageLower: page.toLowerCase(),
+          pageInContent: true,
+          regexSource: regex.source,
+        });
         const newContent = content.replaceAll(regex, (match) => {
           const hasSpaces = /\s/g.test(match);
 
@@ -212,6 +236,16 @@ export function replaceContentWithPageLinks(
           
           // Check if this page is an alias that should link to original
           const linkTarget = aliasToOriginalMap.get(page.toLowerCase()) || whichCase;
+
+          console.log({
+            LogseqAutomaticLinker: "non-CJK page matched",
+            page,
+            match,
+            pageLower: page.toLowerCase(),
+            aliasLookup: aliasToOriginalMap.get(page.toLowerCase()),
+            whichCase,
+            linkTarget,
+          });
 
           // Use temporary placeholder (index-based) to prevent nested matching
           const placeholder = `${TEMP_LINK_PLACEHOLDER_PREFIX}${tempLinkIndex++}@@`;
