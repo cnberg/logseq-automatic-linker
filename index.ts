@@ -482,11 +482,117 @@ async function getPageContent(pageName: string): Promise<string> {
 }
 
 /**
- * Process the template: replace {{block-content}} with actual content
+ * Get block content by UUID
  */
-function processTemplate(template: string, blockContent: string): string {
-  // Only replace the first occurrence
-  return template.replace("{{block-content}}", blockContent);
+async function getBlockContentByUuid(uuid: string): Promise<string> {
+  try {
+    const block = await logseq.Editor.getBlock(uuid, { includeChildren: true });
+    if (!block) return "";
+    
+    const contents: string[] = [];
+    
+    async function processBlock(b: any, indentLevel: number = 0): Promise<void> {
+      const indent = "  ".repeat(indentLevel);
+      contents.push(indent + b.content);
+      
+      if (b.children && b.children.length > 0) {
+        for (const child of b.children) {
+          const childBlock = typeof child === "object" ? child : await logseq.Editor.getBlock(child);
+          if (childBlock) {
+            await processBlock(childBlock, indentLevel + 1);
+          }
+        }
+      }
+    }
+    
+    await processBlock(block, 0);
+    return contents.join("\n");
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "getBlockContentByUuid error", uuid, error });
+    return "";
+  }
+}
+
+/**
+ * Recursively expand all embeds in content.
+ * Handles:
+ * - {{embed [[PageName]]}} - embed a page
+ * - {{embed ((block-uuid))}} - embed a block
+ * 
+ * @param content - The content to process
+ * @param depth - Current recursion depth (to prevent infinite loops)
+ * @param maxDepth - Maximum recursion depth
+ */
+async function expandEmbeds(
+  content: string,
+  depth: number = 0,
+  maxDepth: number = 10
+): Promise<string> {
+  if (depth >= maxDepth) {
+    console.warn({ LogseqAutomaticLinker: "expandEmbeds max depth reached", depth });
+    return content;
+  }
+
+  let result = content;
+  let hasChanges = true;
+
+  // Keep processing until no more embeds are found (handles nested embeds)
+  while (hasChanges && depth < maxDepth) {
+    hasChanges = false;
+
+    // Pattern for {{embed [[PageName]]}}
+    const pageEmbedRegex = /\{\{embed\s+\[\[([^\]]+)\]\]\s*\}\}/gi;
+    const pageMatches = [...result.matchAll(pageEmbedRegex)];
+    
+    for (const match of pageMatches) {
+      const fullMatch = match[0];
+      const pageName = match[1];
+      
+      console.log({ LogseqAutomaticLinker: "expandEmbeds page", pageName, depth });
+      
+      const pageContent = await getPageContent(pageName);
+      if (pageContent) {
+        result = result.replace(fullMatch, pageContent);
+        hasChanges = true;
+      }
+    }
+
+    // Pattern for {{embed ((block-uuid))}}
+    const blockEmbedRegex = /\{\{embed\s+\(\(([a-f0-9-]+)\)\)\s*\}\}/gi;
+    const blockMatches = [...result.matchAll(blockEmbedRegex)];
+    
+    for (const match of blockMatches) {
+      const fullMatch = match[0];
+      const blockUuid = match[1];
+      
+      console.log({ LogseqAutomaticLinker: "expandEmbeds block", blockUuid, depth });
+      
+      const blockContent = await getBlockContentByUuid(blockUuid);
+      if (blockContent) {
+        result = result.replace(fullMatch, blockContent);
+        hasChanges = true;
+      }
+    }
+
+    depth++;
+  }
+
+  return result;
+}
+
+/**
+ * Process the template: 
+ * 1. Expand all embeds recursively
+ * 2. Replace {{block-content}} with actual content
+ */
+async function processTemplate(template: string, blockContent: string): Promise<string> {
+  // First, expand all embeds in the template
+  let processed = await expandEmbeds(template);
+  
+  // Then replace the first {{block-content}} placeholder
+  processed = processed.replace("{{block-content}}", blockContent);
+  
+  return processed;
 }
 
 /**
@@ -693,8 +799,8 @@ async function handlePromptSelection(pageName: string) {
     return;
   }
 
-  // Process the template
-  const result = processTemplate(templateContent, blockContent);
+  // Process the template (expand embeds and replace placeholders)
+  const result = await processTemplate(templateContent, blockContent);
   console.log({
     LogseqAutomaticLinker: "handlePromptSelection result",
     resultLength: result?.length,
