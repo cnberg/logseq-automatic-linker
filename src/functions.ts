@@ -175,9 +175,18 @@ export function replaceContentWithPageLinks(
   let tempLinkIndex = 0;
 
   console.log({
-    LogseqAutomaticLinker: "replaceContentWithPageLinks start",
-    contentLength: content.length,
-    contentPreview: content.substring(0, 100),
+    LogseqAutomaticLinker: "replaceContentWithPageLinks after protection",
+    originalContentLength: content.length,
+    contentAfterProtection: content,
+    protectedItems: {
+      codeblocks: codeblockReversalTracker.length,
+      inlineCodes: inlineCodeReversalTracker.length,
+      properties: propertyTracker.length,
+      markdownLinks: markdownLinkTracker.length,
+      customQueries: customQueryTracker.length,
+      existingLinks: existingLinksTracker.length,
+      existingLinksContent: existingLinksTracker,
+    },
     allPagesCount: allPages.length,
     aliasMapSize: aliasToOriginalMap.size,
     aliasMapEntries: Array.from(aliasToOriginalMap.entries()),
@@ -217,16 +226,34 @@ export function replaceContentWithPageLinks(
       }
     } else {
       // Use word-boundary based regex for non-CJK pages
-      if (content.toUpperCase().includes(page.toUpperCase())) {
+      const pageFoundInContent = content.toUpperCase().includes(page.toUpperCase());
+      if (pageFoundInContent) {
         // Use cached regex for non-Chinese pages
         const regex = getPageRegex(page);
+        // Test if regex matches before replacement
+        const regexMatches = regex.test(content);
+        // Reset regex lastIndex since we used test()
+        regex.lastIndex = 0;
+        
         console.log({
           LogseqAutomaticLinker: "non-CJK page checking",
           page,
           pageLower: page.toLowerCase(),
-          pageInContent: true,
+          pageFoundInContent,
+          regexMatches,
           regexSource: regex.source,
+          contentSnippet: content.substring(0, 200),
         });
+        
+        if (!regexMatches) {
+          console.log({
+            LogseqAutomaticLinker: "non-CJK page NOT matched by regex",
+            page,
+            reason: "Regex did not match despite page string found in content",
+            hint: "Check if page is inside protected content or boundary chars are missing",
+          });
+        }
+        
         const newContent = content.replaceAll(regex, (match) => {
           const hasSpaces = /\s/g.test(match);
 
