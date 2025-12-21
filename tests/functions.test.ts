@@ -641,4 +641,52 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
+
+  // CJK boundary tests with alias
+  describe("CJK boundary with alias", () => {
+    it("should link alias AAA to original page in '中文AAA'", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("aaa", "OriginalPage");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "中文AAA",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("中文[[OriginalPage]]");
+      expect(update).toBe(true);
+    });
+
+    it("should link Chinese alias to original page surrounded by Chinese", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("别名", "原始页面");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["别名"],
+        "这是别名测试",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("这是[[原始页面]]测试");
+      expect(update).toBe(true);
+    });
+
+    it("should link alias in mixed CJK-English context", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("test", "TestPage");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        ["test"],
+        "中文test中文",
+        false,
+        false,
+        aliasMap
+      );
+      expect(content).toBe("中文[[TestPage]]中文");
+      expect(update).toBe(true);
+    });
+  });
 });
