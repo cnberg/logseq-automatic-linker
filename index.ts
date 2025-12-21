@@ -973,11 +973,11 @@ const main = async () => {
     }
   });
 
-  // Register toolbar button to show alias pages
+  // Register toolbar button with dropdown menu
   logseq.App.registerUIItem("toolbar", {
-    key: "show-alias-pages",
+    key: "automatic-linker-menu",
     template: `
-      <a class="button" data-on-click="showAliasPages" title="Show Auto-Link-to-Original Pages">
+      <a class="button" data-on-click="showLinkerMenu" title="Automatic Linker">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
@@ -988,176 +988,223 @@ const main = async () => {
 
   // Handle toolbar button click
   logseq.provideModel({
-    async showAliasPages() {
-      await showAliasPagesSidebar();
+    showLinkerMenu() {
+      showLinkerDropdownMenu();
+    },
+    async convertAliasLinks() {
+      hideLinkerMenu();
+      await convertAllAliasLinksToOriginal();
     },
   });
 };
 
-// ============== Alias Pages Sidebar Feature ==============
+// ============== Linker Menu Feature ==============
 
-const ALIAS_SIDEBAR_KEY = "alias-pages-sidebar";
+const LINKER_MENU_KEY = "automatic-linker-dropdown-menu";
 
 /**
- * Show all pages with auto-link-to-original:: true in the right sidebar
+ * Show the dropdown menu for Automatic Linker
  */
-async function showAliasPagesSidebar() {
-  // Query pages with auto-link-to-original:: true
-  const query = `
-    [:find (pull ?p [:block/name :block/original-name :block/properties])
-     :where
-     [?p :block/properties ?props]
-     [(get ?props :auto-link-to-original) ?val]
-     [(= ?val true)]]
+function showLinkerDropdownMenu() {
+  const menuTemplate = `
+    <div id="linker-menu-backdrop" style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 998;
+    "></div>
+    <div id="linker-dropdown-menu" style="
+      position: fixed;
+      top: 48px;
+      right: 60px;
+      min-width: 280px;
+      background: var(--ls-primary-background-color, white);
+      border: 1px solid var(--ls-border-color, #e0e0e0);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 999;
+      overflow: hidden;
+      font-family: var(--ls-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    ">
+      <div style="
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--ls-secondary-text-color, #666);
+        background: var(--ls-secondary-background-color, #f7f7f7);
+      ">
+        Automatic Linker
+      </div>
+      <div class="linker-menu-item" data-on-click="convertAliasLinks" style="
+        padding: 12px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48l2.12 2.12m0-12.72l-2.12 2.12m-8.48 8.48l-2.12 2.12"/>
+        </svg>
+        <div>
+          <div style="font-weight: 500;">Convert alias links to original</div>
+          <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
+            Replace [[alias]] with [[original]] in all blocks
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 
+  logseq.provideUI({
+    key: LINKER_MENU_KEY,
+    template: menuTemplate,
+    style: {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      zIndex: 998,
+    },
+  });
+
+  // Set up backdrop click to close
+  setTimeout(() => {
+    const backdrop = top?.document.getElementById("linker-menu-backdrop");
+    if (backdrop) {
+      backdrop.onclick = () => hideLinkerMenu();
+    }
+  }, 50);
+}
+
+/**
+ * Hide the linker dropdown menu
+ */
+function hideLinkerMenu() {
+  logseq.provideUI({
+    key: LINKER_MENU_KEY,
+    template: "",
+  });
+}
+
+/**
+ * Convert all alias links to original page links across the entire graph.
+ * Only affects pages with auto-link-to-original:: true property.
+ */
+async function convertAllAliasLinksToOriginal() {
+  logseq.App.showMsg("Scanning for alias links...", "info");
+
   try {
-    const results = await logseq.DB.datascriptQuery(query);
+    // Ensure we have the latest alias mapping
+    const aliasMap = await fetchAliasToOriginalMap();
     
-    if (!results || results.length === 0) {
+    if (aliasMap.size === 0) {
       logseq.App.showMsg("No pages with auto-link-to-original:: true found", "warning");
       return;
     }
 
-    // Extract page info
-    const pages = results
-      .map((r: any) => ({
-        name: r[0]?.["original-name"] || r[0]?.["name"],
-        aliases: r[0]?.properties?.alias || [],
-      }))
-      .filter((p: any) => p.name)
-      .sort((a: any, b: any) => a.name.localeCompare(b.name));
-
-    console.log({ LogseqAutomaticLinker: "showAliasPagesSidebar", pages });
-
-    // Build the sidebar content
-    const listItems = pages
-      .map((page: any, index: number) => {
-        const aliases = Array.isArray(page.aliases) 
-          ? page.aliases.join(", ") 
-          : page.aliases || "";
-        return `
-          <div class="alias-page-item" style="
-            padding: 10px 12px;
-            border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
-            cursor: pointer;
-          " data-page="${page.name}">
-            <div style="font-weight: 500; color: var(--ls-link-text-color, #045591);">
-              ${page.name}
-            </div>
-            ${aliases ? `<div style="font-size: 12px; color: var(--ls-secondary-text-color, #666); margin-top: 4px;">
-              Aliases: ${aliases}
-            </div>` : ""}
-          </div>
-        `;
-      })
-      .join("");
-
-    const sidebarContent = `
-      <div id="alias-pages-container" style="
-        padding: 0;
-        font-family: var(--ls-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-      ">
-        <div style="
-          padding: 12px 16px;
-          border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
-          font-weight: 600;
-          background: var(--ls-secondary-background-color, #f7f7f7);
-        ">
-          Auto-Link-to-Original Pages (${pages.length})
-        </div>
-        <div style="max-height: calc(100vh - 150px); overflow-y: auto;">
-          ${listItems}
-        </div>
-      </div>
-    `;
-
-    // Show in right sidebar using a custom page
-    logseq.provideUI({
-      key: ALIAS_SIDEBAR_KEY,
-      path: "main-content-container",
-      template: `<div></div>`,
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal",
+      aliasMapSize: aliasMap.size,
+      aliasMapEntries: Array.from(aliasMap.entries()),
     });
 
-    // Use App.pushState to open sidebar, or create a virtual display
-    // For now, show as a modal-like panel
-    const uiTemplate = `
-      <div id="alias-sidebar-panel" style="
-        position: fixed;
-        top: 48px;
-        right: 0;
-        width: 320px;
-        height: calc(100vh - 48px);
-        background: var(--ls-primary-background-color, white);
-        border-left: 1px solid var(--ls-border-color, #e0e0e0);
-        z-index: 999;
-        box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-        overflow: hidden;
-      ">
-        <div style="
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 12px;
-          border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
-          background: var(--ls-secondary-background-color, #f7f7f7);
-        ">
-          <span style="font-weight: 600;">Auto-Link Pages (${pages.length})</span>
-          <span id="alias-sidebar-close" style="cursor: pointer; font-size: 20px; padding: 4px;">×</span>
-        </div>
-        <div style="overflow-y: auto; height: calc(100% - 45px);">
-          ${listItems}
-        </div>
-      </div>
+    // Build regex to match all aliases
+    const aliasNames = Array.from(aliasMap.keys());
+    let updatedBlocksCount = 0;
+    let totalLinksConverted = 0;
+
+    // Query all blocks with content
+    const query = `
+      [:find (pull ?b [:block/uuid :block/content])
+       :where
+       [?b :block/content ?c]
+       [(not= ?c "")]]
     `;
 
-    logseq.provideUI({
-      key: ALIAS_SIDEBAR_KEY,
-      template: uiTemplate,
-      style: {
-        position: "fixed",
-        top: "0",
-        right: "0",
-        zIndex: 999,
-      },
+    const results = await logseq.DB.datascriptQuery(query);
+    
+    if (!results || results.length === 0) {
+      logseq.App.showMsg("No blocks found", "warning");
+      return;
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal blocks found",
+      blockCount: results.length,
     });
 
-    // Set up event listeners
-    setTimeout(() => {
-      const closeBtn = top?.document.getElementById("alias-sidebar-close");
-      if (closeBtn) {
-        closeBtn.onclick = () => hideAliasSidebar();
+    // Process each block
+    for (const result of results) {
+      const block = result[0];
+      if (!block?.uuid || !block?.content) continue;
+
+      let content = block.content;
+      let modified = false;
+      let linksInBlock = 0;
+
+      // Check for each alias
+      for (const [aliasLower, originalName] of aliasMap.entries()) {
+        // Match [[alias]] or #[[alias]] (case-insensitive for the alias part)
+        const linkRegex = new RegExp(
+          `(#?)\\[\\[(${escapeRegex(aliasLower)})\\]\\]`,
+          "gi"
+        );
+
+        const newContent = content.replace(linkRegex, (match, prefix, linkTarget) => {
+          // Only replace if it's actually the alias (case-insensitive)
+          if (linkTarget.toLowerCase() === aliasLower) {
+            linksInBlock++;
+            return `${prefix}[[${originalName}]]`;
+          }
+          return match;
+        });
+
+        if (newContent !== content) {
+          content = newContent;
+          modified = true;
+        }
       }
 
-      const items = top?.document.querySelectorAll(".alias-page-item");
-      items?.forEach((item) => {
-        (item as HTMLElement).onclick = async () => {
-          const pageName = item.getAttribute("data-page");
-          if (pageName) {
-            hideAliasSidebar();
-            // Navigate to the page
-            logseq.App.pushState("page", { name: pageName });
-          }
-        };
-      });
-    }, 100);
+      // Update block if modified
+      if (modified) {
+        await logseq.Editor.updateBlock(block.uuid, content);
+        updatedBlocksCount++;
+        totalLinksConverted += linksInBlock;
+      }
+    }
+
+    // Show result
+    if (updatedBlocksCount > 0) {
+      logseq.App.showMsg(
+        `Converted ${totalLinksConverted} alias links in ${updatedBlocksCount} blocks`,
+        "success"
+      );
+    } else {
+      logseq.App.showMsg("No alias links found to convert", "info");
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal completed",
+      updatedBlocksCount,
+      totalLinksConverted,
+    });
 
   } catch (error) {
-    console.error({ LogseqAutomaticLinker: "showAliasPagesSidebar error", error });
+    console.error({ LogseqAutomaticLinker: "convertAllAliasLinksToOriginal error", error });
     logseq.App.showMsg(`Error: ${error}`, "error");
   }
 }
 
 /**
- * Hide the alias pages sidebar
+ * Escape special regex characters in a string
  */
-function hideAliasSidebar() {
-  logseq.provideUI({
-    key: ALIAS_SIDEBAR_KEY,
-    template: "",
-  });
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ============== End Alias Pages Sidebar Feature ==============
+// ============== End Linker Menu Feature ==============
 
 logseq.ready(main).catch(console.error);
