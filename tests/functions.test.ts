@@ -605,4 +605,40 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
+
+  // CJK boundary tests for English pages
+  describe("CJK boundary for English pages", () => {
+    it("should link AAA in '中文AAA'", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "中文AAA",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[AAA]]");
+      expect(update).toBe(true);
+    });
+
+    it("should link AAA in 'AAA中文'", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "AAA中文",
+        false,
+        false
+      );
+      expect(content).toBe("[[AAA]]中文");
+      expect(update).toBe(true);
+    });
+
+    it("should link AAA in '中文AAA中文'", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "中文AAA中文",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[AAA]]中文");
+      expect(update).toBe(true);
+    });
+  });
 });
