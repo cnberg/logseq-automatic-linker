@@ -225,6 +225,11 @@ async function getPages() {
       aliasToOriginalMapSize: aliasToOriginalMap.size,
       aliasToOriginalMapEntries: Array.from(aliasToOriginalMap.entries()),
     });
+    // Show toast notification
+    logseq.App.showMsg(
+      `Automatic Linker: Loaded ${pageList.length} pages, ${aliasToOriginalMap.size} auto-link aliases`,
+      "success"
+    );
   });
 }
 
