@@ -160,16 +160,53 @@ export function replaceContentWithPageLinks(
     }
   );
 
-  // Protect existing [[...]] links and #[[...]] tags from being matched inside
+  // Convert tags to links first: #[[tag]] -> [[tag]], #tag -> [[tag]]
+  // This allows alias conversion and other processing to work on tags too
+  let tagsConverted = false;
+  
+  // Protect priority markers [#A], [#B], [#C] etc. before tag conversion
+  const priorityMarkerRegex = /\[#([A-Za-z])\]/g;
+  const priorityMarkers: string[] = [];
+  const PRIORITY_PLACEHOLDER = "@@PRIORITY@@";
+  content = content.replaceAll(priorityMarkerRegex, (match) => {
+    priorityMarkers.push(match);
+    return PRIORITY_PLACEHOLDER;
+  });
+  
+  // Convert #[[tag]] to [[tag]]
+  const contentBeforeTagConversion = content;
+  content = content.replaceAll(/#\[\[([^\[\]]+)\]\]/g, (match, tagName) => {
+    console.debug({ LogseqAutomaticLinker: "tag with brackets converted", match, tagName });
+    return `[[${tagName}]]`;
+  });
+  
+  // Convert #tag to [[tag]] (simple tags - word characters, CJK, and common punctuation in page names)
+  // Match # followed by word characters (including CJK) that form a valid tag
+  // Don't match headers (##), special syntax, or inside brackets
+  content = content.replaceAll(/(?<!\[)#([\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff][\w\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff-]*)/g, (match, tagName) => {
+    console.debug({ LogseqAutomaticLinker: "simple tag converted", match, tagName });
+    return `[[${tagName}]]`;
+  });
+  
+  if (content !== contentBeforeTagConversion) {
+    tagsConverted = true;
+  }
+  
+  // Restore priority markers
+  priorityMarkers.forEach((marker) => {
+    content = content.replace(PRIORITY_PLACEHOLDER, marker);
+  });
+
+  // Protect existing [[...]] links from being matched inside
   // This prevents "[[一二三四]]" from having "二三" matched inside it
   const existingLinksTracker: string[] = [];
-  content = content.replaceAll(/#?\[\[[^\[\]]+\]\]/g, (match) => {
+  content = content.replaceAll(/\[\[[^\[\]]+\]\]/g, (match) => {
     existingLinksTracker.push(match);
     console.debug({ LogseqAutomaticLinker: "existing link found", match });
     return EXISTING_LINK_PLACEHOLDER;
   });
 
-  let needsUpdate = false;
+  let needsUpdate = tagsConverted;
   // Map to store temporary placeholders and their actual link content
   const tempLinksMap: Map<string, string> = new Map();
   let tempLinkIndex = 0;

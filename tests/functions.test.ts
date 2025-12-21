@@ -725,7 +725,7 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
 
-    it("should convert #[[alias]] to #[[original]]", () => {
+    it("should convert #[[alias]] to [[original]] (tag converted to link)", () => {
       const aliasMap = new Map<string, string>();
       aliasMap.set("alias", "original");
       
@@ -736,8 +736,8 @@ describe("replaceContentWithPageLinks()", () => {
         false,
         aliasMap
       );
-      // Spaces preserved for English
-      expect(content).toBe("Tagged with #[[original]] here");
+      // Tags are converted to links, then alias is resolved
+      expect(content).toBe("Tagged with [[original]] here");
       expect(update).toBe(true);
     });
 
@@ -790,3 +790,79 @@ describe("replaceContentWithPageLinks()", () => {
     });
   });
 });
+
+  // Tag to link conversion tests
+  describe("Tag to link conversion", () => {
+    it("should convert #tag to [[tag]]", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "This has #mytag here",
+        false,
+        false
+      );
+      expect(content).toBe("This has [[mytag]] here");
+      expect(update).toBe(true);
+    });
+
+    it("should convert #[[tag]] to [[tag]]", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "This has #[[my tag]] here",
+        false,
+        false
+      );
+      expect(content).toBe("This has [[my tag]] here");
+      expect(update).toBe(true);
+    });
+
+    it("should preserve priority markers [#A]", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "TODO [#A] This is important",
+        false,
+        false
+      );
+      expect(content).toBe("TODO [#A] This is important");
+      expect(update).toBe(false);
+    });
+
+    it("should convert Chinese tags with delimiter", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "这是#中文标签 测试",
+        false,
+        false
+      );
+      // Space delimits the tag, then space is removed (CJK adjacent)
+      expect(content).toBe("这是[[中文标签]]测试");
+      expect(update).toBe(true);
+    });
+
+    it("should convert Chinese tags with punctuation delimiter", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "这是#中文标签，测试",
+        false,
+        false
+      );
+      // Comma delimits the tag - but comma is not a word char so it stops
+      expect(content).toBe("这是[[中文标签]]，测试");
+      expect(update).toBe(true);
+    });
+
+    it("should convert tag and then apply alias mapping", () => {
+      const aliasMap = new Map<string, string>();
+      aliasMap.set("alias", "original");
+      
+      let [content, update] = replaceContentWithPageLinks(
+        [],
+        "This has #alias tag",
+        false,
+        false,
+        aliasMap
+      );
+      // Tag converted to link, then alias resolved
+      expect(content).toBe("This has [[original]] tag");
+      expect(update).toBe(true);
+    });
+  });
