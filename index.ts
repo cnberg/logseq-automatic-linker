@@ -581,13 +581,40 @@ async function expandEmbeds(
 }
 
 /**
+ * Get formatted current date with day of week
+ */
+function getCurrentDateString(): string {
+  const now = new Date();
+  
+  const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const weekdaysCN = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  const weekday = weekdays[now.getDay()];
+  const weekdayCN = weekdaysCN[now.getDay()];
+  
+  // Format: 2025-01-15 14:30:25 Wednesday (星期三)
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${weekday} (${weekdayCN})`;
+}
+
+/**
  * Process the template: 
  * 1. Expand all embeds recursively
- * 2. Replace {{block-content}} with actual content
+ * 2. Replace {{date}} with current date/time
+ * 3. Replace {{block-content}} with actual content
  */
 async function processTemplate(template: string, blockContent: string): Promise<string> {
   // First, expand all embeds in the template
   let processed = await expandEmbeds(template);
+  
+  // Replace {{date}} with current date/time (replace all occurrences)
+  const dateString = getCurrentDateString();
+  processed = processed.replace(/\{\{date\}\}/gi, dateString);
   
   // Then replace the first {{block-content}} placeholder
   processed = processed.replace("{{block-content}}", blockContent);
