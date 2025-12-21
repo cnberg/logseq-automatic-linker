@@ -789,7 +789,6 @@ describe("replaceContentWithPageLinks()", () => {
       expect(update).toBe(true);
     });
   });
-});
 
   // Tag to link conversion tests
   describe("Tag to link conversion", () => {
@@ -865,7 +864,6 @@ describe("replaceContentWithPageLinks()", () => {
       expect(content).toBe("This has [[original]] tag");
       expect(update).toBe(true);
     });
-  });
 
     it("should convert namespace tags with slash", () => {
       let [content, update] = replaceContentWithPageLinks(
@@ -877,3 +875,5 @@ describe("replaceContentWithPageLinks()", () => {
       expect(content).toBe("This has [[ABC/CDE]] tag");
       expect(update).toBe(true);
     });
+  });
+});

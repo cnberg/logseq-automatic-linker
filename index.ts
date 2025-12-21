@@ -967,5 +967,192 @@ const main = async () => {
       await showPromptTemplateSelector(e.uuid);
     }
   });
+
+  // Register toolbar button to show alias pages
+  logseq.App.registerUIItem("toolbar", {
+    key: "show-alias-pages",
+    template: `
+      <a class="button" data-on-click="showAliasPages" title="Show Auto-Link-to-Original Pages">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </a>
+    `,
+  });
+
+  // Handle toolbar button click
+  logseq.provideModel({
+    async showAliasPages() {
+      await showAliasPagesSidebar();
+    },
+  });
 };
+
+// ============== Alias Pages Sidebar Feature ==============
+
+const ALIAS_SIDEBAR_KEY = "alias-pages-sidebar";
+
+/**
+ * Show all pages with auto-link-to-original:: true in the right sidebar
+ */
+async function showAliasPagesSidebar() {
+  // Query pages with auto-link-to-original:: true
+  const query = `
+    [:find (pull ?p [:block/name :block/original-name :block/properties])
+     :where
+     [?p :block/properties ?props]
+     [(get ?props :auto-link-to-original) ?val]
+     [(= ?val true)]]
+  `;
+
+  try {
+    const results = await logseq.DB.datascriptQuery(query);
+    
+    if (!results || results.length === 0) {
+      logseq.App.showMsg("No pages with auto-link-to-original:: true found", "warning");
+      return;
+    }
+
+    // Extract page info
+    const pages = results
+      .map((r: any) => ({
+        name: r[0]?.["original-name"] || r[0]?.["name"],
+        aliases: r[0]?.properties?.alias || [],
+      }))
+      .filter((p: any) => p.name)
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+
+    console.log({ LogseqAutomaticLinker: "showAliasPagesSidebar", pages });
+
+    // Build the sidebar content
+    const listItems = pages
+      .map((page: any, index: number) => {
+        const aliases = Array.isArray(page.aliases) 
+          ? page.aliases.join(", ") 
+          : page.aliases || "";
+        return `
+          <div class="alias-page-item" style="
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
+            cursor: pointer;
+          " data-page="${page.name}">
+            <div style="font-weight: 500; color: var(--ls-link-text-color, #045591);">
+              ${page.name}
+            </div>
+            ${aliases ? `<div style="font-size: 12px; color: var(--ls-secondary-text-color, #666); margin-top: 4px;">
+              Aliases: ${aliases}
+            </div>` : ""}
+          </div>
+        `;
+      })
+      .join("");
+
+    const sidebarContent = `
+      <div id="alias-pages-container" style="
+        padding: 0;
+        font-family: var(--ls-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+      ">
+        <div style="
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
+          font-weight: 600;
+          background: var(--ls-secondary-background-color, #f7f7f7);
+        ">
+          Auto-Link-to-Original Pages (${pages.length})
+        </div>
+        <div style="max-height: calc(100vh - 150px); overflow-y: auto;">
+          ${listItems}
+        </div>
+      </div>
+    `;
+
+    // Show in right sidebar using a custom page
+    logseq.provideUI({
+      key: ALIAS_SIDEBAR_KEY,
+      path: "main-content-container",
+      template: `<div></div>`,
+    });
+
+    // Use App.pushState to open sidebar, or create a virtual display
+    // For now, show as a modal-like panel
+    const uiTemplate = `
+      <div id="alias-sidebar-panel" style="
+        position: fixed;
+        top: 48px;
+        right: 0;
+        width: 320px;
+        height: calc(100vh - 48px);
+        background: var(--ls-primary-background-color, white);
+        border-left: 1px solid var(--ls-border-color, #e0e0e0);
+        z-index: 999;
+        box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        overflow: hidden;
+      ">
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 12px;
+          border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
+          background: var(--ls-secondary-background-color, #f7f7f7);
+        ">
+          <span style="font-weight: 600;">Auto-Link Pages (${pages.length})</span>
+          <span id="alias-sidebar-close" style="cursor: pointer; font-size: 20px; padding: 4px;">×</span>
+        </div>
+        <div style="overflow-y: auto; height: calc(100% - 45px);">
+          ${listItems}
+        </div>
+      </div>
+    `;
+
+    logseq.provideUI({
+      key: ALIAS_SIDEBAR_KEY,
+      template: uiTemplate,
+      style: {
+        position: "fixed",
+        top: "0",
+        right: "0",
+        zIndex: 999,
+      },
+    });
+
+    // Set up event listeners
+    setTimeout(() => {
+      const closeBtn = top?.document.getElementById("alias-sidebar-close");
+      if (closeBtn) {
+        closeBtn.onclick = () => hideAliasSidebar();
+      }
+
+      const items = top?.document.querySelectorAll(".alias-page-item");
+      items?.forEach((item) => {
+        (item as HTMLElement).onclick = async () => {
+          const pageName = item.getAttribute("data-page");
+          if (pageName) {
+            hideAliasSidebar();
+            // Navigate to the page
+            logseq.App.pushState("page", { name: pageName });
+          }
+        };
+      });
+    }, 100);
+
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "showAliasPagesSidebar error", error });
+    logseq.App.showMsg(`Error: ${error}`, "error");
+  }
+}
+
+/**
+ * Hide the alias pages sidebar
+ */
+function hideAliasSidebar() {
+  logseq.provideUI({
+    key: ALIAS_SIDEBAR_KEY,
+    template: "",
+  });
+}
+
+// ============== End Alias Pages Sidebar Feature ==============
+
 logseq.ready(main).catch(console.error);
