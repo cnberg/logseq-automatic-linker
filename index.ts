@@ -190,6 +190,13 @@ const settings: SettingSchemaDesc[] = [
     default: "prompt",
     title: "Prompt Template Namespace",
   },
+  {
+    key: "splitBlockKeybinding",
+    description: "Keybinding to split the current block by lines",
+    type: "string",
+    default: "mod+shift+s",
+    title: "Keybinding for Split Block",
+  },
 ];
 logseq.useSettingsSchema(settings);
 async function getPages() {
@@ -960,6 +967,18 @@ const main = async () => {
     async (e) => {
       if (e.uuid) {
         await showPromptTemplateSelector(e.uuid);
+      } else {
+        logseq.App.showMsg("Please focus on a block first", "warning");
+      }
+    }
+  );
+
+  // Register shortcut for split block
+  logseq.App.registerCommandShortcut(
+    { binding: logseq.settings?.splitBlockKeybinding },
+    async (e) => {
+      if (e.uuid) {
+        await splitBlockAction(e.uuid);
       } else {
         logseq.App.showMsg("Please focus on a block first", "warning");
       }
