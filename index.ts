@@ -358,6 +358,72 @@ async function splitBlockAction(blockId: string) {
   console.log({ LogseqAutomaticLinker: "splitBlockAction", blockId, newBlocksCount: newBlocks.length });
 }
 
+/**
+ * Split all blocks in the current page that contain multiple lines.
+ */
+async function splitAllBlocksInCurrentPage() {
+  const currentPage = await logseq.Editor.getCurrentPage();
+  if (!currentPage) {
+    logseq.App.showMsg("Please navigate to a page first", "warning");
+    return;
+  }
+
+  const pageName = currentPage.originalName || currentPage.name;
+  logseq.App.showMsg(`Scanning blocks in "${pageName}"...`, "info");
+
+  try {
+    // Get all blocks in the current page
+    const pageBlocksTree = await logseq.Editor.getPageBlocksTree(pageName);
+    if (!pageBlocksTree || pageBlocksTree.length === 0) {
+      logseq.App.showMsg("No blocks found in this page", "warning");
+      return;
+    }
+
+    // Collect all block UUIDs that need splitting (blocks with multiple lines)
+    const blocksToSplit: string[] = [];
+    
+    function collectBlocksToSplit(blocks: any[]) {
+      for (const block of blocks) {
+        if (block.content && block.content.includes("\n")) {
+          blocksToSplit.push(block.uuid);
+        }
+        if (block.children && block.children.length > 0) {
+          collectBlocksToSplit(block.children);
+        }
+      }
+    }
+    
+    collectBlocksToSplit(pageBlocksTree);
+
+    if (blocksToSplit.length === 0) {
+      logseq.App.showMsg("No multi-line blocks found to split", "info");
+      return;
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "splitAllBlocksInCurrentPage",
+      pageName,
+      blocksToSplitCount: blocksToSplit.length,
+    });
+
+    // Split each block (process in reverse order to avoid position shifts)
+    let splitCount = 0;
+    for (const blockUuid of blocksToSplit.reverse()) {
+      await splitBlockAction(blockUuid);
+      splitCount++;
+    }
+
+    logseq.App.showMsg(
+      `Split ${splitCount} blocks in "${pageName}"`,
+      "success"
+    );
+
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "splitAllBlocksInCurrentPage error", error });
+    logseq.App.showMsg(`Error: ${error}`, "error");
+  }
+}
+
 async function parseBlockForLink(d: string) {
   console.log({ 
     LogseqAutomaticLinker: "parseBlockForLink called", 
@@ -977,8 +1043,14 @@ const main = async () => {
   logseq.App.registerCommandShortcut(
     { binding: logseq.settings?.splitBlockKeybinding },
     async (e) => {
-      if (e.uuid) {
-        await splitBlockAction(e.uuid);
+      let blockUuid = e.uuid;
+      // Fallback: try to get current block if not in editing mode
+      if (!blockUuid) {
+        const currentBlock = await logseq.Editor.getCurrentBlock();
+        blockUuid = currentBlock?.uuid;
+      }
+      if (blockUuid) {
+        await splitBlockAction(blockUuid);
       } else {
         logseq.App.showMsg("Please focus on a block first", "warning");
       }
@@ -1013,6 +1085,10 @@ const main = async () => {
     async convertAliasLinks() {
       hideLinkerMenu();
       await convertAllAliasLinksToOriginal();
+    },
+    async splitAllBlocksInPage() {
+      hideLinkerMenu();
+      await splitAllBlocksInCurrentPage();
     },
   });
 };
@@ -1064,6 +1140,7 @@ function showLinkerDropdownMenu() {
         align-items: center;
         gap: 10px;
         transition: background 0.15s;
+        border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
       ">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48l2.12 2.12m0-12.72l-2.12 2.12m-8.48 8.48l-2.12 2.12"/>
@@ -1072,6 +1149,26 @@ function showLinkerDropdownMenu() {
           <div style="font-weight: 500;">Convert alias links to original</div>
           <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
             Replace [[alias]] with [[original]] in all blocks
+          </div>
+        </div>
+      </div>
+      <div class="linker-menu-item" data-on-click="splitAllBlocksInPage" style="
+        padding: 12px 14px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+        <div>
+          <div style="font-weight: 500;">Split all blocks in current page</div>
+          <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
+            Split multi-line blocks by lines
           </div>
         </div>
       </div>
