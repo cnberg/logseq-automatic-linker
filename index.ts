@@ -359,20 +359,14 @@ async function splitBlockAction(blockId: string) {
 }
 
 /**
- * Split all blocks in the current page that contain multiple lines.
+ * Split all blocks in a page that contain multiple lines.
+ * @param pageName The name of the page to process
  */
-async function splitAllBlocksInCurrentPage() {
-  const currentPage = await logseq.Editor.getCurrentPage();
-  if (!currentPage) {
-    logseq.App.showMsg("Please navigate to a page first", "warning");
-    return;
-  }
-
-  const pageName = currentPage.originalName || currentPage.name;
+async function splitAllBlocksInPage(pageName: string) {
   logseq.App.showMsg(`Scanning blocks in "${pageName}"...`, "info");
 
   try {
-    // Get all blocks in the current page
+    // Get all blocks in the page
     const pageBlocksTree = await logseq.Editor.getPageBlocksTree(pageName);
     if (!pageBlocksTree || pageBlocksTree.length === 0) {
       logseq.App.showMsg("No blocks found in this page", "warning");
@@ -401,7 +395,7 @@ async function splitAllBlocksInCurrentPage() {
     }
 
     console.log({
-      LogseqAutomaticLinker: "splitAllBlocksInCurrentPage",
+      LogseqAutomaticLinker: "splitAllBlocksInPage",
       pageName,
       blocksToSplitCount: blocksToSplit.length,
     });
@@ -419,7 +413,7 @@ async function splitAllBlocksInCurrentPage() {
     );
 
   } catch (error) {
-    console.error({ LogseqAutomaticLinker: "splitAllBlocksInCurrentPage error", error });
+    console.error({ LogseqAutomaticLinker: "splitAllBlocksInPage error", error });
     logseq.App.showMsg(`Error: ${error}`, "error");
   }
 }
@@ -972,6 +966,17 @@ const main = async () => {
     return splitBlockAction(e.uuid);
   });
 
+  // Register page menu item to split all blocks in the page
+  logseq.App.registerPageMenuItem(
+    "Split all blocks in this page",
+    async (e) => {
+      const page = await logseq.Editor.getPage(e.page);
+      if (page) {
+        await splitAllBlocksInPage(page.originalName || page.name);
+      }
+    }
+  );
+
   // Register page menu item to unlink all references to the current page
   logseq.Editor.registerPageMenuItem(
     "Unlink all references to this page",
@@ -1086,10 +1091,6 @@ const main = async () => {
       hideLinkerMenu();
       await convertAllAliasLinksToOriginal();
     },
-    async splitAllBlocksInPage() {
-      hideLinkerMenu();
-      await splitAllBlocksInCurrentPage();
-    },
   });
 };
 
@@ -1140,7 +1141,6 @@ function showLinkerDropdownMenu() {
         align-items: center;
         gap: 10px;
         transition: background 0.15s;
-        border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
       ">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48l2.12 2.12m0-12.72l-2.12 2.12m-8.48 8.48l-2.12 2.12"/>
@@ -1149,26 +1149,6 @@ function showLinkerDropdownMenu() {
           <div style="font-weight: 500;">Convert alias links to original</div>
           <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
             Replace [[alias]] with [[original]] in all blocks
-          </div>
-        </div>
-      </div>
-      <div class="linker-menu-item" data-on-click="splitAllBlocksInPage" style="
-        padding: 12px 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        transition: background 0.15s;
-      ">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-        <div>
-          <div style="font-weight: 500;">Split all blocks in current page</div>
-          <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
-            Split multi-line blocks by lines
           </div>
         </div>
       </div>
