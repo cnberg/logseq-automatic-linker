@@ -977,6 +977,17 @@ const main = async () => {
     }
   );
 
+  // Register page menu item to convert alias links to original
+  logseq.App.registerPageMenuItem(
+    "Convert alias links to original",
+    async (e) => {
+      const page = await logseq.Editor.getPage(e.page);
+      if (page) {
+        await convertAliasLinksInPage(page.originalName || page.name);
+      }
+    }
+  );
+
   // Register page menu item to unlink all references to the current page
   logseq.Editor.registerPageMenuItem(
     "Unlink all references to this page",
@@ -1068,129 +1079,16 @@ const main = async () => {
       await showPromptTemplateSelector(e.uuid);
     }
   });
-
-  // Register toolbar button with dropdown menu
-  logseq.App.registerUIItem("toolbar", {
-    key: "automatic-linker-menu",
-    template: `
-      <a class="button" data-on-click="showLinkerMenu" title="Automatic Linker">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-      </a>
-    `,
-  });
-
-  // Handle toolbar button click
-  logseq.provideModel({
-    showLinkerMenu() {
-      showLinkerDropdownMenu();
-    },
-    async convertAliasLinks() {
-      hideLinkerMenu();
-      await convertAllAliasLinksToOriginal();
-    },
-  });
 };
 
-// ============== Linker Menu Feature ==============
-
-const LINKER_MENU_KEY = "automatic-linker-dropdown-menu";
+// ============== Alias Link Conversion Feature ==============
 
 /**
- * Show the dropdown menu for Automatic Linker
- */
-function showLinkerDropdownMenu() {
-  const menuTemplate = `
-    <div id="linker-menu-backdrop" style="
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 998;
-    "></div>
-    <div id="linker-dropdown-menu" style="
-      position: fixed;
-      top: 48px;
-      right: 60px;
-      min-width: 280px;
-      background: var(--ls-primary-background-color, white);
-      border: 1px solid var(--ls-border-color, #e0e0e0);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 999;
-      overflow: hidden;
-      font-family: var(--ls-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-    ">
-      <div style="
-        padding: 10px 14px;
-        border-bottom: 1px solid var(--ls-border-color, #e0e0e0);
-        font-weight: 600;
-        font-size: 13px;
-        color: var(--ls-secondary-text-color, #666);
-        background: var(--ls-secondary-background-color, #f7f7f7);
-      ">
-        Automatic Linker
-      </div>
-      <div class="linker-menu-item" data-on-click="convertAliasLinks" style="
-        padding: 12px 14px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        transition: background 0.15s;
-      ">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48l2.12 2.12m0-12.72l-2.12 2.12m-8.48 8.48l-2.12 2.12"/>
-        </svg>
-        <div>
-          <div style="font-weight: 500;">Convert alias links to original</div>
-          <div style="font-size: 12px; color: var(--ls-secondary-text-color, #888); margin-top: 2px;">
-            Replace [[alias]] with [[original]] in all blocks
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  logseq.provideUI({
-    key: LINKER_MENU_KEY,
-    template: menuTemplate,
-    style: {
-      position: "fixed",
-      top: "0",
-      left: "0",
-      zIndex: 998,
-    },
-  });
-
-  // Set up backdrop click to close
-  setTimeout(() => {
-    const backdrop = top?.document.getElementById("linker-menu-backdrop");
-    if (backdrop) {
-      backdrop.onclick = () => hideLinkerMenu();
-    }
-  }, 50);
-}
-
-/**
- * Hide the linker dropdown menu
- */
-function hideLinkerMenu() {
-  logseq.provideUI({
-    key: LINKER_MENU_KEY,
-    template: "",
-  });
-}
-
-/**
- * Convert all alias links to original page links across the entire graph.
+ * Convert alias links to original page links in a specific page.
  * Only affects pages with auto-link-to-original:: true property.
  */
-async function convertAllAliasLinksToOriginal() {
-  logseq.App.showMsg("Scanning for alias links...", "info");
+async function convertAliasLinksInPage(pageName: string) {
+  logseq.App.showMsg(`Scanning blocks in "${pageName}"...`, "info");
 
   try {
     // Ensure we have the latest alias mapping
@@ -1201,42 +1099,39 @@ async function convertAllAliasLinksToOriginal() {
       return;
     }
 
-    console.log({
-      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal",
-      aliasMapSize: aliasMap.size,
-      aliasMapEntries: Array.from(aliasMap.entries()),
-    });
-
-    // Build regex to match all aliases
-    const aliasNames = Array.from(aliasMap.keys());
-    let updatedBlocksCount = 0;
-    let totalLinksConverted = 0;
-
-    // Query all blocks with content
-    const query = `
-      [:find (pull ?b [:block/uuid :block/content])
-       :where
-       [?b :block/content ?c]
-       [(not= ?c "")]]
-    `;
-
-    const results = await logseq.DB.datascriptQuery(query);
-    
-    if (!results || results.length === 0) {
-      logseq.App.showMsg("No blocks found", "warning");
+    // Get all blocks in the page
+    const pageBlocksTree = await logseq.Editor.getPageBlocksTree(pageName);
+    if (!pageBlocksTree || pageBlocksTree.length === 0) {
+      logseq.App.showMsg("No blocks found in this page", "warning");
       return;
     }
 
+    // Collect all blocks recursively
+    const allBlocks: any[] = [];
+    function collectBlocks(blocks: any[]) {
+      for (const block of blocks) {
+        if (block.uuid && block.content) {
+          allBlocks.push(block);
+        }
+        if (block.children && block.children.length > 0) {
+          collectBlocks(block.children);
+        }
+      }
+    }
+    collectBlocks(pageBlocksTree);
+
     console.log({
-      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal blocks found",
-      blockCount: results.length,
+      LogseqAutomaticLinker: "convertAliasLinksInPage",
+      pageName,
+      blockCount: allBlocks.length,
+      aliasMapSize: aliasMap.size,
     });
 
-    // Process each block
-    for (const result of results) {
-      const block = result[0];
-      if (!block?.uuid || !block?.content) continue;
+    let updatedBlocksCount = 0;
+    let totalLinksConverted = 0;
 
+    // Process each block
+    for (const block of allBlocks) {
       let content = block.content;
       let modified = false;
       let linksInBlock = 0;
@@ -1249,7 +1144,7 @@ async function convertAllAliasLinksToOriginal() {
           "gi"
         );
 
-        const newContent = content.replace(linkRegex, (match, prefix, linkTarget) => {
+        const newContent = content.replace(linkRegex, (match: string, prefix: string, linkTarget: string) => {
           // Only replace if it's actually the alias (case-insensitive)
           if (linkTarget.toLowerCase() === aliasLower) {
             linksInBlock++;
@@ -1279,17 +1174,18 @@ async function convertAllAliasLinksToOriginal() {
         "success"
       );
     } else {
-      logseq.App.showMsg("No alias links found to convert", "info");
+      logseq.App.showMsg("No alias links found to convert in this page", "info");
     }
 
     console.log({
-      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal completed",
+      LogseqAutomaticLinker: "convertAliasLinksInPage completed",
+      pageName,
       updatedBlocksCount,
       totalLinksConverted,
     });
 
   } catch (error) {
-    console.error({ LogseqAutomaticLinker: "convertAllAliasLinksToOriginal error", error });
+    console.error({ LogseqAutomaticLinker: "convertAliasLinksInPage error", error });
     logseq.App.showMsg(`Error: ${error}`, "error");
   }
 }
@@ -1300,7 +1196,5 @@ async function convertAllAliasLinksToOriginal() {
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-
-// ============== End Linker Menu Feature ==============
 
 logseq.ready(main).catch(console.error);
