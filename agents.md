@@ -361,14 +361,18 @@
 
 每次修改完代码后，必须执行以下步骤：
 
-1. **编写 Commit Log**：根据修改内容编写清晰、有意义的 commit message
+1. **构建项目**：运行 `yarn run dev` 生成目标文件，确保代码能够正确编译
+
+2. **运行测试**：运行 `npm test` 确保所有测试通过
+
+3. **编写 Commit Log**：根据修改内容编写清晰、有意义的 commit message
    - 使用简洁的标题描述主要变更
    - 如有必要，在正文中详细说明修改原因和影响
    - 遵循项目现有的 commit message 风格
 
-2. **提交代码**：使用 `git add` 和 `git commit` 提交变更
+4. **提交代码**：使用 `git add` 和 `git commit` 提交变更
 
-3. **推送到远程**：使用 `git push origin <branch>` 将代码推送到 origin
+5. **推送到远程**：使用 `git push origin <branch>` 将代码推送到 origin
 
 ### Commit Message 格式
 
