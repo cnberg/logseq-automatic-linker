@@ -793,15 +793,40 @@ async function showPromptTemplateSelector(blockUuid: string) {
   const blockContent = await getBlockContentWithChildren(blockUuid);
   
   // Build the UI HTML
+  const buttonStyle = `
+    padding: 4px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  `.replace(/\n/g, "");
+
   const listItems = pages
     .map((page, index) => {
       const displayName = page.replace(/^prompt\//i, "");
       return `
         <div class="prompt-item" data-page="${page}" data-index="${index}"
-             style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #e0e0e0;"
-             onmouseover="this.style.backgroundColor='#f0f0f0'"
-             onmouseout="this.style.backgroundColor='transparent'">
-          ${displayName}
+             style="padding: 10px 12px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+          <span style="flex: 1; font-weight: 500;">${displayName}</span>
+          <div style="display: flex; gap: 6px;">
+            <button class="prompt-btn-invoke" data-page="${page}" style="${buttonStyle}"
+                    onmouseover="this.style.background='#e8f4ff';this.style.borderColor='#4a9eff'"
+                    onmouseout="this.style.background='#fff';this.style.borderColor='#ddd'">
+              调用
+            </button>
+            <button class="prompt-btn-copy" data-page="${page}" style="${buttonStyle}"
+                    onmouseover="this.style.background='#e8fff4';this.style.borderColor='#4aff9e'"
+                    onmouseout="this.style.background='#fff';this.style.borderColor='#ddd'">
+              复制
+            </button>
+            <button class="prompt-btn-edit" data-page="${page}" style="${buttonStyle}"
+                    onmouseover="this.style.background='#fff4e8';this.style.borderColor='#ffae4a'"
+                    onmouseout="this.style.background='#fff';this.style.borderColor='#ddd'">
+              编辑模板
+            </button>
+          </div>
         </div>
       `;
     })
@@ -813,20 +838,20 @@ async function showPromptTemplateSelector(blockUuid: string) {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: white;
+      background: var(--ls-primary-background-color, white);
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-      min-width: 300px;
-      max-width: 500px;
-      max-height: 400px;
+      min-width: 450px;
+      max-width: 600px;
+      max-height: 500px;
       z-index: 9999;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: var(--ls-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     ">
-      <div style="padding: 12px 16px; border-bottom: 1px solid #e0e0e0; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+      <div style="padding: 12px 16px; border-bottom: 1px solid var(--ls-border-color, #e0e0e0); font-weight: 600; display: flex; justify-content: space-between; align-items: center; background: var(--ls-secondary-background-color, #f7f7f7);">
         <span>Select Prompt Template</span>
         <span id="prompt-close-btn" style="cursor: pointer; font-size: 18px; color: #666;">&times;</span>
       </div>
-      <div style="max-height: 300px; overflow-y: auto;">
+      <div style="max-height: 400px; overflow-y: auto;">
         ${listItems}
       </div>
     </div>
@@ -873,12 +898,38 @@ async function showPromptTemplateSelector(blockUuid: string) {
     }
 
     if (container) {
-      const items = container.querySelectorAll(".prompt-item");
-      items.forEach((item) => {
-        (item as HTMLElement).onclick = async () => {
-          const pageName = item.getAttribute("data-page");
+      // Handle "调用" (Invoke) button - send to LLM
+      const invokeButtons = container.querySelectorAll(".prompt-btn-invoke");
+      invokeButtons.forEach((btn) => {
+        (btn as HTMLElement).onclick = async (e) => {
+          e.stopPropagation();
+          const pageName = btn.getAttribute("data-page");
           if (pageName) {
-            await handlePromptSelection(pageName);
+            await handlePromptAction(pageName, "invoke");
+          }
+        };
+      });
+
+      // Handle "复制" (Copy) button - copy to clipboard
+      const copyButtons = container.querySelectorAll(".prompt-btn-copy");
+      copyButtons.forEach((btn) => {
+        (btn as HTMLElement).onclick = async (e) => {
+          e.stopPropagation();
+          const pageName = btn.getAttribute("data-page");
+          if (pageName) {
+            await handlePromptAction(pageName, "copy");
+          }
+        };
+      });
+
+      // Handle "编辑模板" (Edit) button - navigate to template page
+      const editButtons = container.querySelectorAll(".prompt-btn-edit");
+      editButtons.forEach((btn) => {
+        (btn as HTMLElement).onclick = async (e) => {
+          e.stopPropagation();
+          const pageName = btn.getAttribute("data-page");
+          if (pageName) {
+            await handlePromptAction(pageName, "edit");
           }
         };
       });
@@ -887,16 +938,29 @@ async function showPromptTemplateSelector(blockUuid: string) {
 }
 
 /**
- * Handle prompt template selection
+ * Handle prompt template action
+ * @param pageName The template page name
+ * @param action The action to perform: "invoke" | "copy" | "edit"
  */
-async function handlePromptSelection(pageName: string) {
+async function handlePromptAction(pageName: string, action: "invoke" | "copy" | "edit") {
+  // For edit action, just navigate to the page
+  if (action === "edit") {
+    hidePromptUI();
+    logseq.App.pushState("page", { name: pageName });
+    // Cleanup
+    delete (window as any).__promptBlockUuid;
+    delete (window as any).__promptBlockContent;
+    return;
+  }
+
   hidePromptUI();
 
   const blockUuid = (window as any).__promptBlockUuid;
   const blockContent = (window as any).__promptBlockContent;
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection start",
+    LogseqAutomaticLinker: "handlePromptAction start",
     pageName,
+    action,
     blockUuid,
     blockContent,
     blockContentLength: blockContent?.length,
@@ -907,16 +971,14 @@ async function handlePromptSelection(pageName: string) {
     return;
   }
 
-  // Check if the template page has askgpt:: true property
-  const templatePage = await logseq.Editor.getPage(pageName);
-  const askGpt = templatePage?.properties?.askgpt === true;
   // Get page-specific model override (gpt-model:: property)
+  const templatePage = await logseq.Editor.getPage(pageName);
   const pageModel = templatePage?.properties?.["gpt-model"] || templatePage?.properties?.gptModel;
 
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection page properties",
+    LogseqAutomaticLinker: "handlePromptAction page properties",
     pageName,
-    askGpt,
+    action,
     pageModel,
     properties: templatePage?.properties,
   });
@@ -924,7 +986,7 @@ async function handlePromptSelection(pageName: string) {
   // Get the template content
   const templateContent = await getPageContent(pageName);
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection templateContent",
+    LogseqAutomaticLinker: "handlePromptAction templateContent",
     pageName,
     templateContent,
     templateContentLength: templateContent?.length,
@@ -938,16 +1000,16 @@ async function handlePromptSelection(pageName: string) {
   // Process the template (expand embeds and replace placeholders)
   const result = await processTemplate(templateContent, blockContent);
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection result",
+    LogseqAutomaticLinker: "handlePromptAction result",
     resultLength: result?.length,
     resultPreview: result?.substring(0, 200),
   });
 
-  if (askGpt) {
+  if (action === "invoke") {
     // Send to LLM and insert response as child block
     await sendToLLMAndInsertResponse(blockUuid, result, pageModel);
-  } else {
-    // Copy to clipboard (original behavior)
+  } else if (action === "copy") {
+    // Copy to clipboard
     const success = await copyToClipboard(result);
     if (success) {
       logseq.App.showMsg("Copied to clipboard!", "success");
@@ -957,8 +1019,8 @@ async function handlePromptSelection(pageName: string) {
   }
 
   console.log({
-    LogseqAutomaticLinker: "handlePromptSelection complete",
-    askGpt,
+    LogseqAutomaticLinker: "handlePromptAction complete",
+    action,
     pageName,
     blockContentLength: blockContent?.length,
     templateContentLength: templateContent?.length,
