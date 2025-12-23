@@ -910,11 +910,14 @@ async function handlePromptSelection(pageName: string) {
   // Check if the template page has askgpt:: true property
   const templatePage = await logseq.Editor.getPage(pageName);
   const askGpt = templatePage?.properties?.askgpt === true;
+  // Get page-specific model override (gpt-model:: property)
+  const pageModel = templatePage?.properties?.["gpt-model"] || templatePage?.properties?.gptModel;
 
   console.log({
     LogseqAutomaticLinker: "handlePromptSelection page properties",
     pageName,
     askGpt,
+    pageModel,
     properties: templatePage?.properties,
   });
 
@@ -942,7 +945,7 @@ async function handlePromptSelection(pageName: string) {
 
   if (askGpt) {
     // Send to LLM and insert response as child block
-    await sendToLLMAndInsertResponse(blockUuid, result);
+    await sendToLLMAndInsertResponse(blockUuid, result, pageModel);
   } else {
     // Copy to clipboard (original behavior)
     const success = await copyToClipboard(result);
@@ -969,11 +972,15 @@ async function handlePromptSelection(pageName: string) {
 
 /**
  * Send prompt to LLM API and insert response as child block
+ * @param blockUuid The UUID of the block to insert response under
+ * @param prompt The prompt to send to LLM
+ * @param pageModel Optional model override from page property (gpt-model::)
  */
-async function sendToLLMAndInsertResponse(blockUuid: string, prompt: string) {
+async function sendToLLMAndInsertResponse(blockUuid: string, prompt: string, pageModel?: string) {
   const apiUrl = logseq.settings?.llmApiUrl;
   const apiKey = logseq.settings?.llmApiKey;
-  const model = logseq.settings?.llmModel || "gpt-4";
+  // Use page-specific model if provided, otherwise use settings default
+  const model = pageModel || logseq.settings?.llmModel || "gpt-4";
 
   if (!apiUrl || !apiKey) {
     logseq.App.showMsg("Please configure LLM API URL and API Key in settings", "error");
