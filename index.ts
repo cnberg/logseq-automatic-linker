@@ -1049,7 +1049,7 @@ async function sendToLLMAndInsertResponse(blockUuid: string, prompt: string, pag
     return;
   }
 
-  logseq.App.showMsg("Sending to LLM...", "info");
+  logseq.App.showMsg(`Sending to ${model}...`, "info");
 
   console.log({
     LogseqAutomaticLinker: "sendToLLMAndInsertResponse",
