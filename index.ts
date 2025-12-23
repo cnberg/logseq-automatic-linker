@@ -1181,7 +1181,7 @@ const main = async () => {
   );
 
   // Register page menu item to unlink all references to the current page
-  logseq.Editor.registerPageMenuItem(
+  logseq.App.registerPageMenuItem(
     "Unlink all references to this page",
     async (e) => {
       const page = await logseq.Editor.getPage(e.page);
