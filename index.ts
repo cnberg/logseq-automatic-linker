@@ -197,6 +197,27 @@ const settings: SettingSchemaDesc[] = [
     default: "mod+shift+s",
     title: "Keybinding for Split Block",
   },
+  {
+    key: "llmApiUrl",
+    description: "API URL for LLM service (OpenAI compatible)",
+    type: "string",
+    default: "https://api.openai.com/v1/chat/completions",
+    title: "LLM API URL",
+  },
+  {
+    key: "llmApiKey",
+    description: "API Key for LLM service",
+    type: "string",
+    default: "",
+    title: "LLM API Key",
+  },
+  {
+    key: "llmModel",
+    description: "Model name for LLM service (e.g., gpt-4, gpt-3.5-turbo)",
+    type: "string",
+    default: "gpt-4",
+    title: "LLM Model",
+  },
 ];
 logseq.useSettingsSchema(settings);
 async function getPages() {
@@ -871,10 +892,12 @@ async function showPromptTemplateSelector(blockUuid: string) {
 async function handlePromptSelection(pageName: string) {
   hidePromptUI();
 
+  const blockUuid = (window as any).__promptBlockUuid;
   const blockContent = (window as any).__promptBlockContent;
   console.log({
     LogseqAutomaticLinker: "handlePromptSelection start",
     pageName,
+    blockUuid,
     blockContent,
     blockContentLength: blockContent?.length,
   });
@@ -883,6 +906,17 @@ async function handlePromptSelection(pageName: string) {
     logseq.App.showMsg("No block content available", "error");
     return;
   }
+
+  // Check if the template page has askgpt:: true property
+  const templatePage = await logseq.Editor.getPage(pageName);
+  const askGpt = templatePage?.properties?.askgpt === true;
+
+  console.log({
+    LogseqAutomaticLinker: "handlePromptSelection page properties",
+    pageName,
+    askGpt,
+    properties: templatePage?.properties,
+  });
 
   // Get the template content
   const templateContent = await getPageContent(pageName);
@@ -906,17 +940,22 @@ async function handlePromptSelection(pageName: string) {
     resultPreview: result?.substring(0, 200),
   });
 
-  // Copy to clipboard
-  const success = await copyToClipboard(result);
-  if (success) {
-    logseq.App.showMsg("Copied to clipboard!", "success");
+  if (askGpt) {
+    // Send to LLM and insert response as child block
+    await sendToLLMAndInsertResponse(blockUuid, result);
   } else {
-    logseq.App.showMsg("Failed to copy to clipboard", "error");
+    // Copy to clipboard (original behavior)
+    const success = await copyToClipboard(result);
+    if (success) {
+      logseq.App.showMsg("Copied to clipboard!", "success");
+    } else {
+      logseq.App.showMsg("Failed to copy to clipboard", "error");
+    }
   }
 
   console.log({
     LogseqAutomaticLinker: "handlePromptSelection complete",
-    success,
+    askGpt,
     pageName,
     blockContentLength: blockContent?.length,
     templateContentLength: templateContent?.length,
@@ -926,6 +965,90 @@ async function handlePromptSelection(pageName: string) {
   // Cleanup
   delete (window as any).__promptBlockUuid;
   delete (window as any).__promptBlockContent;
+}
+
+/**
+ * Send prompt to LLM API and insert response as child block
+ */
+async function sendToLLMAndInsertResponse(blockUuid: string, prompt: string) {
+  const apiUrl = logseq.settings?.llmApiUrl;
+  const apiKey = logseq.settings?.llmApiKey;
+  const model = logseq.settings?.llmModel || "gpt-4";
+
+  if (!apiUrl || !apiKey) {
+    logseq.App.showMsg("Please configure LLM API URL and API Key in settings", "error");
+    return;
+  }
+
+  logseq.App.showMsg("Sending to LLM...", "info");
+
+  console.log({
+    LogseqAutomaticLinker: "sendToLLMAndInsertResponse",
+    blockUuid,
+    promptLength: prompt.length,
+    promptPreview: prompt.substring(0, 200),
+    apiUrl,
+    model,
+  });
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error({
+        LogseqAutomaticLinker: "LLM API error",
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+      });
+      logseq.App.showMsg(`LLM API error: ${response.status} ${response.statusText}`, "error");
+      return;
+    }
+
+    const data = await response.json();
+    const llmResponse = data.choices?.[0]?.message?.content;
+
+    console.log({
+      LogseqAutomaticLinker: "LLM response received",
+      responseLength: llmResponse?.length,
+      responsePreview: llmResponse?.substring(0, 200),
+    });
+
+    if (!llmResponse) {
+      logseq.App.showMsg("Empty response from LLM", "warning");
+      return;
+    }
+
+    // Insert response as child block
+    await logseq.Editor.insertBlock(blockUuid, llmResponse, {
+      sibling: false, // Insert as child
+    });
+
+    logseq.App.showMsg("LLM response inserted!", "success");
+
+  } catch (error) {
+    console.error({
+      LogseqAutomaticLinker: "sendToLLMAndInsertResponse error",
+      error,
+    });
+    logseq.App.showMsg(`Error calling LLM: ${error}`, "error");
+  }
 }
 
 // ============== End Prompt Template Feature ==============
