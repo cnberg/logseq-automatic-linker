@@ -327,6 +327,73 @@ async function unlinkAllReferencesToPage(pageName: string) {
 }
 
 /**
+ * Remove all links to a specific page from journal pages only.
+ * This will convert [[PageName]], #PageName, and #[[PageName]] to plain text,
+ * but only in blocks that belong to journal pages.
+ */
+async function unlinkJournalReferencesToPage(pageName: string) {
+  // Query all blocks that reference this page and are on journal pages
+  const query = `
+    [:find (pull ?b [:block/uuid :block/content])
+     :where
+     [?p :block/name "${pageName.toLowerCase()}"]
+     [?b :block/refs ?p]
+     [?b :block/page ?page]
+     [?page :block/journal? true]]
+  `;
+
+  try {
+    const results = await logseq.DB.datascriptQuery(query);
+    if (!results || results.length === 0) {
+      logseq.App.showMsg(`No journal references to "${pageName}" found`, "warning");
+      return;
+    }
+
+    let updatedCount = 0;
+    for (const result of results) {
+      const block = result[0];
+      if (!block || !block.content) continue;
+
+      let content = block.content;
+      const originalContent = content;
+
+      // Create regex patterns to match different link formats (case-insensitive)
+      const escapedPageName = pageName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+      // Match [[PageName]] - wiki link format
+      const wikiLinkRegex = new RegExp(`\\[\\[${escapedPageName}\\]\\]`, "gi");
+      content = content.replace(wikiLinkRegex, pageName);
+
+      // Match #[[PageName]] - tag with brackets format
+      const tagBracketRegex = new RegExp(`#\\[\\[${escapedPageName}\\]\\]`, "gi");
+      content = content.replace(tagBracketRegex, pageName);
+
+      // Match #PageName - simple tag format (only if not followed by [[)
+      const tagRegex = new RegExp(`#${escapedPageName}(?![\\[\\w])`, "gi");
+      content = content.replace(tagRegex, pageName);
+
+      if (content !== originalContent) {
+        await logseq.Editor.updateBlock(block.uuid, content);
+        updatedCount++;
+      }
+    }
+
+    logseq.App.showMsg(
+      `Unlinked "${pageName}" from ${updatedCount} journal block(s)`,
+      "success"
+    );
+    console.log({
+      LogseqAutomaticLinker: "unlinkJournalReferencesToPage",
+      pageName,
+      updatedCount,
+    });
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "unlinkJournalReferencesToPage error", error });
+    logseq.App.showMsg(`Error unlinking journal references: ${error}`, "error");
+  }
+}
+
+/**
  * Navigate to today's journal page (single page, not journal stream).
  */
 async function goToTodayJournal() {
@@ -1188,6 +1255,18 @@ const main = async () => {
       if (page) {
         const pageName = page.originalName || page.name;
         unlinkAllReferencesToPage(pageName);
+      }
+    }
+  );
+
+  // Register page menu item to unlink journal references only
+  logseq.App.registerPageMenuItem(
+    "Unlink journal references to this page",
+    async (e) => {
+      const page = await logseq.Editor.getPage(e.page);
+      if (page) {
+        const pageName = page.originalName || page.name;
+        unlinkJournalReferencesToPage(pageName);
       }
     }
   );
