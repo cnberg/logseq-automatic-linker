@@ -657,6 +657,39 @@ describe("replaceContentWithPageLinks()", () => {
       expect(content).toBe("中文[[AAA]]中文");
       expect(update).toBe(true);
     });
+
+    it("should link AAA in '中文AAA。' (with Chinese period)", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "中文AAA。",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[AAA]]。");
+      expect(update).toBe(true);
+    });
+
+    it("should link AAA in '中文AAA，BBB' (with Chinese comma)", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA", "BBB"],
+        "中文AAA，BBB",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[AAA]]，[[BBB]]");
+      expect(update).toBe(true);
+    });
+
+    it("should link AAA in '中文AAA！' (with Chinese exclamation)", () => {
+      let [content, update] = replaceContentWithPageLinks(
+        ["AAA"],
+        "中文AAA！",
+        false,
+        false
+      );
+      expect(content).toBe("中文[[AAA]]！");
+      expect(update).toBe(true);
+    });
   });
 
   // CJK boundary tests with alias
