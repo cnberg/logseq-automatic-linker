@@ -1236,7 +1236,7 @@ const main = async () => {
     }
   );
 
-  // Register page menu item to convert alias links to original
+  // Register page menu item to convert alias links to original (current page only)
   logseq.App.registerPageMenuItem(
     "Convert alias links to original",
     async (e) => {
@@ -1244,6 +1244,14 @@ const main = async () => {
       if (page) {
         await convertAliasLinksInPage(page.originalName || page.name);
       }
+    }
+  );
+
+  // Register page menu item to convert ALL alias links to original (entire graph)
+  logseq.App.registerPageMenuItem(
+    "Convert ALL alias links to original",
+    async () => {
+      await convertAllAliasLinksToOriginal();
     }
   );
 
@@ -1457,6 +1465,113 @@ async function convertAliasLinksInPage(pageName: string) {
 
   } catch (error) {
     console.error({ LogseqAutomaticLinker: "convertAliasLinksInPage error", error });
+    logseq.App.showMsg(`Error: ${error}`, "error");
+  }
+}
+
+/**
+ * Convert ALL alias links to original page links across the entire graph.
+ * Only affects pages with auto-link-to-original:: true property.
+ */
+async function convertAllAliasLinksToOriginal() {
+  logseq.App.showMsg("Scanning entire graph for alias links...", "info");
+
+  try {
+    // Ensure we have the latest alias mapping
+    const aliasMap = await fetchAliasToOriginalMap();
+    
+    if (aliasMap.size === 0) {
+      logseq.App.showMsg("No pages with auto-link-to-original:: true found", "warning");
+      return;
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal",
+      aliasMapSize: aliasMap.size,
+      aliasMapEntries: Array.from(aliasMap.entries()),
+    });
+
+    let updatedBlocksCount = 0;
+    let totalLinksConverted = 0;
+
+    // Query all blocks with content
+    const query = `
+      [:find (pull ?b [:block/uuid :block/content])
+       :where
+       [?b :block/content ?c]
+       [(not= ?c "")]]
+    `;
+
+    const results = await logseq.DB.datascriptQuery(query);
+    
+    if (!results || results.length === 0) {
+      logseq.App.showMsg("No blocks found", "warning");
+      return;
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal blocks found",
+      blockCount: results.length,
+    });
+
+    // Process each block
+    for (const result of results) {
+      const block = result[0];
+      if (!block?.uuid || !block?.content) continue;
+
+      let content = block.content;
+      let modified = false;
+      let linksInBlock = 0;
+
+      // Check for each alias
+      for (const [aliasLower, originalName] of aliasMap.entries()) {
+        // Match [[alias]] or #[[alias]] (case-insensitive for the alias part)
+        const linkRegex = new RegExp(
+          `(#?)\\[\\[(${escapeRegex(aliasLower)})\\]\\]`,
+          "gi"
+        );
+
+        const newContent = content.replace(linkRegex, (match: string, prefix: string, linkTarget: string) => {
+          // Only replace if it's actually the alias (case-insensitive)
+          if (linkTarget.toLowerCase() === aliasLower) {
+            linksInBlock++;
+            return `${prefix}[[${originalName}]]`;
+          }
+          return match;
+        });
+
+        if (newContent !== content) {
+          content = newContent;
+          modified = true;
+        }
+      }
+
+      // Update block if modified
+      if (modified) {
+        await logseq.Editor.updateBlock(block.uuid, content);
+        updatedBlocksCount++;
+        totalLinksConverted += linksInBlock;
+      }
+    }
+
+    // Show result
+    if (updatedBlocksCount > 0) {
+      logseq.App.showMsg(
+        `Converted ${totalLinksConverted} alias links in ${updatedBlocksCount} blocks (entire graph)`,
+        "success"
+      );
+    } else {
+      logseq.App.showMsg("No alias links found to convert in entire graph", "info");
+    }
+
+    console.log({
+      LogseqAutomaticLinker: "convertAllAliasLinksToOriginal completed",
+      updatedBlocksCount,
+      totalLinksConverted,
+    });
+
+  } catch (error) {
+    console.error({ LogseqAutomaticLinker: "convertAllAliasLinksToOriginal error", error });
     logseq.App.showMsg(`Error: ${error}`, "error");
   }
 }
